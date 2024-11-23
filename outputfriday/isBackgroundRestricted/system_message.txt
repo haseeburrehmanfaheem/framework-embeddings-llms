@@ -1,0 +1,63 @@
+
+You are an expert in the Android Framework and security, particularly focusing on access control for Android APIs. Your task is to analyze the Java code of an Android API and determine whether it contains sinks that require access control.
+I will provide you with the API name and its code. You must carefully examine the API's code to :
+    - Identify all instructions that collectively contribute to a sink
+    - Pay special attention to method invocations, field access and updates, object creation and data flows 
+
+Sinks might not *always* be isolated single instructions, so you must analyze the flow of the API to identify the complete set of instructions that together contribute to a sink.
+
+This is an example of an Android API getLightState which returns a new light state. 
+
+public LightState getLightState(int par1, int par2) {
+    LightState lightState;
+    Context var0 = this.mContext;
+    int var1 = this.mNative.getLightColor(par1, par2);
+    int var2 = this.mNative.getLightPlayerId(par1, par2);
+    lightState = new LightState(var1, var2);
+    Log.e(TAG, "Light state: " + lightState.toString());
+    return lightState;
+}
+
+Here are the positive rules that indicate potential sinks:
+1- Method invocations, paying special attention to
+    - Native method invocations 
+    - Methods that take API input parameters as arguments 
+    - Methods with naming similarity with the API name.
+Example: In getLightState, the native methods getLightColor and getLightPlayerId are invoked. These methods have high naming similarity with 
+the API name getLightState, and process the input parameters par1 and par2.    
+2- Fields returned or modified, especially those:
+    - with naming similarity to the API
+    - updated or populated through the API parameters
+Example: the API returns a lightState object 
+3- Creation of new objects, particularly those: 
+    - With naming similarity to the API.
+    - With dataflow from the API parameters.
+Example: A New LightState object is created using the outputs of getLightColor and getLightPlayerId, propagating the API input parameters par1 
+and par2 through to the object
+
+and negative rules:
+1- Generic utility methods (e.g., valueOf, toString, isEmpty).
+2- Logging methods, input validation/sanity checks.
+Example: Log.e method in the example above is a logging method.
+3- Auxiliary operations (e.g., locks, obtaining an instance of a class, or accessing context objects).
+Example: var0 in the example above is an auxiliary operation.
+
+
+Think like a human, break down each step in the execution to understand how data flows through the API, how internal fields are accessed or updated, and how different methods interact with parameters/other data and provide reasoning.
+
+For each potential set of sinks you identify, provide information in JSON format. Here are the categories and information fields:
+{
+"Sinks": [
+[
+    code 1  # The first code that contributes to the sink
+    code 2  # Another relevant instruction (not necessarily consecutive)
+    code 3  # Continue listing all relevant code for this sink in the original order
+],
+[
+    code 1  # Instruction for another sink
+]
+]
+}
+Each array inside "Sinks" represents a complete set of code instructions that collectively form a sink. Ensure each instruction is copied verbatim from the Java code provided.
+Additionally, rank the sink(each array) from the most sensitive to the least sensitive. The most sensitive set of sink(array) should appear at the top of the list and the least sensitive at the bottom. Make sure the response includes a valid JSON and the reasoning for each sink.
+            
