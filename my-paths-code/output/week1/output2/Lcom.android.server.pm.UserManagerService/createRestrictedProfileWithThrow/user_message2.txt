@@ -1,0 +1,589 @@
+The method createRestrictedProfileWithThrow has the following code snippet:
+
+This is path 1 for the API with depth 2:
+depth : 0
+public UserInfo createRestrictedProfileWithThrow(String p1, int p2){
+	UserManagerService.checkCreateUsersPermission("setupRestrictedProfile");
+	UserInfo v2 = p0.createProfileForUserWithThrow(p1, "android.os.usertype.full.RESTRICTED", 0, p2, 0);
+	long v3 = Binder.clearCallingIdentity();
+	p0.setUserRestriction("no_modify_accounts", 1, UserInfo.id);
+	ContentResolver v5 = this.mContext.getContentResolver();
+	boolean v6 = Settings$Secure.putIntForUser(v5, "location_mode", 0, UserInfo.id);
+	p0.setUserRestriction("no_share_location", 1, UserInfo.id);
+	Binder.restoreCallingIdentity(v3);
+	return v2;
+}
+-----
+depth : 1
+public void checkCreateUsersPermission(String p1){
+	boolean v1 = UserManagerService.hasCreateUsersPermission();
+	return;
+}
+-----
+depth : 2
+public boolean hasCreateUsersPermission(){
+	boolean v1 = UserManagerService.hasManageUsersOrPermission("android.permission.CREATE_USERS");
+	return v1;
+}
+-----
+depth : 1
+public UserInfo createProfileForUserWithThrow(String p1, String p2, int p3, int p4, String p5){
+	UserManagerService.checkCreateUsersPermission(p3);
+	UserInfo v2 = p0.createUserInternal(p1, p2, p3, p4, p5);
+	return v2;
+}
+-----
+depth : 2
+public void checkCreateUsersPermission(int p1){
+	boolean v1 = UserManagerService.hasCreateUsersPermission();
+	return;
+}
+-----
+depth : 2
+public UserInfo createUserInternal(String p1, String p2, int p3, int p4, String p5){
+	boolean v1 = UserManager.isUserTypeCloneProfile(p2);
+	boolean v2 = UserManager.isUserTypeManagedProfile(p2);
+	int v3 = UserHandle.getCallingUserId();
+	p0.enforceUserRestriction(phiInstruction, v3, "Cannot add user");
+	UserInfo v5 = p0.createUserInternalUnchecked(p1, p2, p3, p4, 0, p5, 0);
+	return v5;
+}
+-----
+depth : 1
+public void setUserRestriction(String p1, boolean p2, int p3){
+	UserManagerService.checkManageUsersPermission("setUserRestriction");
+	boolean v2 = UserRestrictionsUtils.isValidRestriction(p1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p3);
+	Bundle v4 = BundleUtils.clone(v3);
+	v4.putBoolean(p1, p2);
+	p0.updateUserRestrictionsInternalLR(v4, p3);
+	return;
+}
+-----
+depth : 2
+public void checkManageUsersPermission(String p1){
+	boolean v1 = UserManagerService.hasManageUsersPermission();
+	return;
+}
+-----
+depth : 2
+public boolean isValidRestriction(String p1){
+	boolean v1 = this.USER_RESTRICTIONS.contains(p1);
+	int v2 = Binder.getCallingUid();
+	IPackageManager v3 = AppGlobals.getPackageManager();
+	String v4 = v3.getPackagesForUid(v2);
+	StringBuilder v4 = new StringBuilder("Unknown restriction queried by uid ");
+	StringBuilder v6 = v4.append(v2);
+	StringBuilder v7 = v4.append(" (");
+	StringBuilder v8 = v4.append(phiInstruction[0]);
+	StringBuilder v9 = v4.append(" et al");
+	StringBuilder v10 = v4.append(")");
+	StringBuilder v11 = v4.append(": ");
+	StringBuilder v12 = v4.append(p1);
+	boolean v13 = UserRestrictionsUtils.isSystemApp(v2, phiInstruction);
+	String v14 = v4.toString();
+	int v15 = Slog.wtf("UserRestrictionsUtils", v14);
+	return 0;
+}
+-----
+depth : 2
+public Bundle getRestrictions(int p1){
+	Object v1 = this.mUserRestrictions.get(p1);
+	return v1;
+}
+-----
+depth : 2
+public Bundle clone(Bundle p1){
+	Bundle v0 = new Bundle(p1);
+	return v0;
+}
+-----
+depth : 2
+public void updateUserRestrictionsInternalLR(Bundle p1, int p2){
+	Bundle v1 = this.mAppliedUserRestrictions.getRestrictions(p2);
+	Bundle v2 = UserRestrictionsUtils.nonNull(v1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	Bundle v5 = this.mCachedEffectiveUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	boolean v7 = this.mBaseUserRestrictions.updateRestrictions(p2, p1);
+	UserManagerService$UserData v8 = p0.getUserDataNoChecks(p2);
+	p0.scheduleWriteUser(v8);
+	Bundle v10 = p0.computeEffectiveUserRestrictionsLR(p2);
+	boolean v11 = this.mCachedEffectiveUserRestrictions.updateRestrictions(p2, v10);
+	UserManagerService$3 v11 = new UserManagerService$3(p0,v10,p2);
+	boolean v13 = this.mHandler.post(v11);
+	p0.propagateUserRestrictionsLR(p2, v10, v2);
+	Bundle v14 = new Bundle(v10);
+	boolean v16 = this.mAppliedUserRestrictions.updateRestrictions(p2, v14);
+	return;
+}
+-----
+depth : 1
+public void setUserRestriction(String p1, boolean p2, int p3){
+	UserManagerService.checkManageUsersPermission("setUserRestriction");
+	boolean v2 = UserRestrictionsUtils.isValidRestriction(p1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p3);
+	Bundle v4 = BundleUtils.clone(v3);
+	v4.putBoolean(p1, p2);
+	p0.updateUserRestrictionsInternalLR(v4, p3);
+	return;
+}
+-----
+depth : 2
+public void checkManageUsersPermission(String p1){
+	boolean v1 = UserManagerService.hasManageUsersPermission();
+	return;
+}
+-----
+depth : 2
+public boolean isValidRestriction(String p1){
+	boolean v1 = this.USER_RESTRICTIONS.contains(p1);
+	int v2 = Binder.getCallingUid();
+	IPackageManager v3 = AppGlobals.getPackageManager();
+	String v4 = v3.getPackagesForUid(v2);
+	StringBuilder v4 = new StringBuilder("Unknown restriction queried by uid ");
+	StringBuilder v6 = v4.append(v2);
+	StringBuilder v7 = v4.append(" (");
+	StringBuilder v8 = v4.append(phiInstruction[0]);
+	StringBuilder v9 = v4.append(" et al");
+	StringBuilder v10 = v4.append(")");
+	StringBuilder v11 = v4.append(": ");
+	StringBuilder v12 = v4.append(p1);
+	boolean v13 = UserRestrictionsUtils.isSystemApp(v2, phiInstruction);
+	String v14 = v4.toString();
+	int v15 = Slog.wtf("UserRestrictionsUtils", v14);
+	return 0;
+}
+-----
+depth : 2
+public Bundle getRestrictions(int p1){
+	Object v1 = this.mUserRestrictions.get(p1);
+	return v1;
+}
+-----
+depth : 2
+public Bundle clone(Bundle p1){
+	Bundle v0 = new Bundle(p1);
+	return v0;
+}
+-----
+depth : 2
+public void updateUserRestrictionsInternalLR(Bundle p1, int p2){
+	Bundle v1 = this.mAppliedUserRestrictions.getRestrictions(p2);
+	Bundle v2 = UserRestrictionsUtils.nonNull(v1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	Bundle v5 = this.mCachedEffectiveUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	boolean v7 = this.mBaseUserRestrictions.updateRestrictions(p2, p1);
+	UserManagerService$UserData v8 = p0.getUserDataNoChecks(p2);
+	p0.scheduleWriteUser(v8);
+	Bundle v10 = p0.computeEffectiveUserRestrictionsLR(p2);
+	boolean v11 = this.mCachedEffectiveUserRestrictions.updateRestrictions(p2, v10);
+	UserManagerService$3 v11 = new UserManagerService$3(p0,v10,p2);
+	boolean v13 = this.mHandler.post(v11);
+	p0.propagateUserRestrictionsLR(p2, v10, v2);
+	Bundle v14 = new Bundle(v10);
+	boolean v16 = this.mAppliedUserRestrictions.updateRestrictions(p2, v14);
+	return;
+}
+-----
+This is path 2 for the API with depth 2:
+depth : 0
+public UserInfo createRestrictedProfileWithThrow(String p1, int p2){
+	UserManagerService.checkCreateUsersPermission("setupRestrictedProfile");
+	UserInfo v2 = p0.createProfileForUserWithThrow(p1, "android.os.usertype.full.RESTRICTED", 0, p2, 0);
+	long v3 = Binder.clearCallingIdentity();
+	p0.setUserRestriction("no_modify_accounts", 1, UserInfo.id);
+	ContentResolver v5 = this.mContext.getContentResolver();
+	boolean v6 = Settings$Secure.putIntForUser(v5, "location_mode", 0, UserInfo.id);
+	p0.setUserRestriction("no_share_location", 1, UserInfo.id);
+	Binder.restoreCallingIdentity(v3);
+	return v2;
+}
+-----
+depth : 1
+public void checkCreateUsersPermission(String p1){
+	boolean v1 = UserManagerService.hasCreateUsersPermission();
+	return;
+}
+-----
+depth : 2
+public boolean hasCreateUsersPermission(){
+	boolean v1 = UserManagerService.hasManageUsersOrPermission("android.permission.CREATE_USERS");
+	return v1;
+}
+-----
+depth : 1
+public UserInfo createProfileForUserWithThrow(String p1, String p2, int p3, int p4, String p5){
+	UserManagerService.checkCreateUsersPermission(p3);
+	UserInfo v2 = p0.createUserInternal(p1, p2, p3, p4, p5);
+	return v2;
+}
+-----
+depth : 2
+public void checkCreateUsersPermission(int p1){
+	boolean v1 = UserManagerService.hasCreateUsersPermission();
+	return;
+}
+-----
+depth : 2
+public UserInfo createUserInternal(String p1, String p2, int p3, int p4, String p5){
+	boolean v1 = UserManager.isUserTypeCloneProfile(p2);
+	int v2 = UserHandle.getCallingUserId();
+	p0.enforceUserRestriction(phiInstruction, v2, "Cannot add user");
+	UserInfo v4 = p0.createUserInternalUnchecked(p1, p2, p3, p4, 0, p5, 0);
+	return v4;
+}
+-----
+depth : 1
+public void setUserRestriction(String p1, boolean p2, int p3){
+	UserManagerService.checkManageUsersPermission("setUserRestriction");
+	boolean v2 = UserRestrictionsUtils.isValidRestriction(p1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p3);
+	Bundle v4 = BundleUtils.clone(v3);
+	v4.putBoolean(p1, p2);
+	p0.updateUserRestrictionsInternalLR(v4, p3);
+	return;
+}
+-----
+depth : 2
+public void checkManageUsersPermission(String p1){
+	boolean v1 = UserManagerService.hasManageUsersPermission();
+	return;
+}
+-----
+depth : 2
+public boolean isValidRestriction(String p1){
+	boolean v1 = this.USER_RESTRICTIONS.contains(p1);
+	int v2 = Binder.getCallingUid();
+	IPackageManager v3 = AppGlobals.getPackageManager();
+	String v4 = v3.getPackagesForUid(v2);
+	StringBuilder v4 = new StringBuilder("Unknown restriction queried by uid ");
+	StringBuilder v6 = v4.append(v2);
+	StringBuilder v7 = v4.append(" (");
+	StringBuilder v8 = v4.append(phiInstruction[0]);
+	StringBuilder v9 = v4.append(" et al");
+	StringBuilder v10 = v4.append(")");
+	StringBuilder v11 = v4.append(": ");
+	StringBuilder v12 = v4.append(p1);
+	boolean v13 = UserRestrictionsUtils.isSystemApp(v2, phiInstruction);
+	String v14 = v4.toString();
+	int v15 = Slog.wtf("UserRestrictionsUtils", v14);
+	return 0;
+}
+-----
+depth : 2
+public Bundle getRestrictions(int p1){
+	Object v1 = this.mUserRestrictions.get(p1);
+	return v1;
+}
+-----
+depth : 2
+public Bundle clone(Bundle p1){
+	Bundle v0 = new Bundle(p1);
+	return v0;
+}
+-----
+depth : 2
+public void updateUserRestrictionsInternalLR(Bundle p1, int p2){
+	Bundle v1 = this.mAppliedUserRestrictions.getRestrictions(p2);
+	Bundle v2 = UserRestrictionsUtils.nonNull(v1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	Bundle v5 = this.mCachedEffectiveUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	boolean v7 = this.mBaseUserRestrictions.updateRestrictions(p2, p1);
+	UserManagerService$UserData v8 = p0.getUserDataNoChecks(p2);
+	p0.scheduleWriteUser(v8);
+	Bundle v10 = p0.computeEffectiveUserRestrictionsLR(p2);
+	boolean v11 = this.mCachedEffectiveUserRestrictions.updateRestrictions(p2, v10);
+	UserManagerService$3 v11 = new UserManagerService$3(p0,v10,p2);
+	boolean v13 = this.mHandler.post(v11);
+	p0.propagateUserRestrictionsLR(p2, v10, v2);
+	Bundle v14 = new Bundle(v10);
+	boolean v16 = this.mAppliedUserRestrictions.updateRestrictions(p2, v14);
+	return;
+}
+-----
+depth : 1
+public void setUserRestriction(String p1, boolean p2, int p3){
+	UserManagerService.checkManageUsersPermission("setUserRestriction");
+	boolean v2 = UserRestrictionsUtils.isValidRestriction(p1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p3);
+	Bundle v4 = BundleUtils.clone(v3);
+	v4.putBoolean(p1, p2);
+	p0.updateUserRestrictionsInternalLR(v4, p3);
+	return;
+}
+-----
+depth : 2
+public void checkManageUsersPermission(String p1){
+	boolean v1 = UserManagerService.hasManageUsersPermission();
+	return;
+}
+-----
+depth : 2
+public boolean isValidRestriction(String p1){
+	boolean v1 = this.USER_RESTRICTIONS.contains(p1);
+	int v2 = Binder.getCallingUid();
+	IPackageManager v3 = AppGlobals.getPackageManager();
+	String v4 = v3.getPackagesForUid(v2);
+	StringBuilder v4 = new StringBuilder("Unknown restriction queried by uid ");
+	StringBuilder v6 = v4.append(v2);
+	StringBuilder v7 = v4.append(" (");
+	StringBuilder v8 = v4.append(phiInstruction[0]);
+	StringBuilder v9 = v4.append(" et al");
+	StringBuilder v10 = v4.append(")");
+	StringBuilder v11 = v4.append(": ");
+	StringBuilder v12 = v4.append(p1);
+	boolean v13 = UserRestrictionsUtils.isSystemApp(v2, phiInstruction);
+	String v14 = v4.toString();
+	int v15 = Slog.wtf("UserRestrictionsUtils", v14);
+	return 0;
+}
+-----
+depth : 2
+public Bundle getRestrictions(int p1){
+	Object v1 = this.mUserRestrictions.get(p1);
+	return v1;
+}
+-----
+depth : 2
+public Bundle clone(Bundle p1){
+	Bundle v0 = new Bundle(p1);
+	return v0;
+}
+-----
+depth : 2
+public void updateUserRestrictionsInternalLR(Bundle p1, int p2){
+	Bundle v1 = this.mAppliedUserRestrictions.getRestrictions(p2);
+	Bundle v2 = UserRestrictionsUtils.nonNull(v1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	Bundle v5 = this.mCachedEffectiveUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	boolean v7 = this.mBaseUserRestrictions.updateRestrictions(p2, p1);
+	UserManagerService$UserData v8 = p0.getUserDataNoChecks(p2);
+	p0.scheduleWriteUser(v8);
+	Bundle v10 = p0.computeEffectiveUserRestrictionsLR(p2);
+	boolean v11 = this.mCachedEffectiveUserRestrictions.updateRestrictions(p2, v10);
+	UserManagerService$3 v11 = new UserManagerService$3(p0,v10,p2);
+	boolean v13 = this.mHandler.post(v11);
+	p0.propagateUserRestrictionsLR(p2, v10, v2);
+	Bundle v14 = new Bundle(v10);
+	boolean v16 = this.mAppliedUserRestrictions.updateRestrictions(p2, v14);
+	return;
+}
+-----
+This is path 3 for the API with depth 2:
+depth : 0
+public UserInfo createRestrictedProfileWithThrow(String p1, int p2){
+	UserManagerService.checkCreateUsersPermission("setupRestrictedProfile");
+	UserInfo v2 = p0.createProfileForUserWithThrow(p1, "android.os.usertype.full.RESTRICTED", 0, p2, 0);
+	long v3 = Binder.clearCallingIdentity();
+	p0.setUserRestriction("no_modify_accounts", 1, UserInfo.id);
+	ContentResolver v5 = this.mContext.getContentResolver();
+	boolean v6 = Settings$Secure.putIntForUser(v5, "location_mode", 0, UserInfo.id);
+	p0.setUserRestriction("no_share_location", 1, UserInfo.id);
+	Binder.restoreCallingIdentity(v3);
+	return v2;
+}
+-----
+depth : 1
+public void checkCreateUsersPermission(String p1){
+	boolean v1 = UserManagerService.hasCreateUsersPermission();
+	return;
+}
+-----
+depth : 2
+public boolean hasCreateUsersPermission(){
+	boolean v1 = UserManagerService.hasManageUsersOrPermission("android.permission.CREATE_USERS");
+	return v1;
+}
+-----
+depth : 1
+public UserInfo createProfileForUserWithThrow(String p1, String p2, int p3, int p4, String p5){
+	UserManagerService.checkCreateUsersPermission(p3);
+	UserInfo v2 = p0.createUserInternal(p1, p2, p3, p4, p5);
+	return v2;
+}
+-----
+depth : 2
+public void checkCreateUsersPermission(int p1){
+	boolean v1 = UserManagerService.hasCreateUsersPermission();
+	return;
+}
+-----
+depth : 2
+public UserInfo createUserInternal(String p1, String p2, int p3, int p4, String p5){
+	boolean v1 = UserManager.isUserTypeCloneProfile(p2);
+	boolean v2 = UserManager.isUserTypeManagedProfile(p2);
+	int v3 = UserHandle.getCallingUserId();
+	p0.enforceUserRestriction(phiInstruction, v3, "Cannot add user");
+	UserInfo v5 = p0.createUserInternalUnchecked(p1, p2, p3, p4, 0, p5, 0);
+	return v5;
+}
+-----
+depth : 1
+public void setUserRestriction(String p1, boolean p2, int p3){
+	UserManagerService.checkManageUsersPermission("setUserRestriction");
+	boolean v2 = UserRestrictionsUtils.isValidRestriction(p1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p3);
+	Bundle v4 = BundleUtils.clone(v3);
+	v4.putBoolean(p1, p2);
+	p0.updateUserRestrictionsInternalLR(v4, p3);
+	return;
+}
+-----
+depth : 2
+public void checkManageUsersPermission(String p1){
+	boolean v1 = UserManagerService.hasManageUsersPermission();
+	return;
+}
+-----
+depth : 2
+public boolean isValidRestriction(String p1){
+	boolean v1 = this.USER_RESTRICTIONS.contains(p1);
+	int v2 = Binder.getCallingUid();
+	IPackageManager v3 = AppGlobals.getPackageManager();
+	String v4 = v3.getPackagesForUid(v2);
+	StringBuilder v4 = new StringBuilder("Unknown restriction queried by uid ");
+	StringBuilder v6 = v4.append(v2);
+	StringBuilder v7 = v4.append(" (");
+	StringBuilder v8 = v4.append(phiInstruction[0]);
+	StringBuilder v9 = v4.append(" et al");
+	StringBuilder v10 = v4.append(")");
+	StringBuilder v11 = v4.append(": ");
+	StringBuilder v12 = v4.append(p1);
+	boolean v13 = UserRestrictionsUtils.isSystemApp(v2, phiInstruction);
+	String v14 = v4.toString();
+	int v15 = Slog.wtf("UserRestrictionsUtils", v14);
+	return 0;
+}
+-----
+depth : 2
+public Bundle getRestrictions(int p1){
+	Object v1 = this.mUserRestrictions.get(p1);
+	return v1;
+}
+-----
+depth : 2
+public Bundle clone(Bundle p1){
+	Bundle v0 = new Bundle();
+	return v0;
+}
+-----
+depth : 2
+public void updateUserRestrictionsInternalLR(Bundle p1, int p2){
+	Bundle v1 = this.mAppliedUserRestrictions.getRestrictions(p2);
+	Bundle v2 = UserRestrictionsUtils.nonNull(v1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	Bundle v5 = this.mCachedEffectiveUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	boolean v7 = this.mBaseUserRestrictions.updateRestrictions(p2, p1);
+	UserManagerService$UserData v8 = p0.getUserDataNoChecks(p2);
+	p0.scheduleWriteUser(v8);
+	Bundle v10 = p0.computeEffectiveUserRestrictionsLR(p2);
+	boolean v11 = this.mCachedEffectiveUserRestrictions.updateRestrictions(p2, v10);
+	UserManagerService$3 v11 = new UserManagerService$3(p0,v10,p2);
+	boolean v13 = this.mHandler.post(v11);
+	p0.propagateUserRestrictionsLR(p2, v10, v2);
+	Bundle v14 = new Bundle(v10);
+	boolean v16 = this.mAppliedUserRestrictions.updateRestrictions(p2, v14);
+	return;
+}
+-----
+depth : 1
+public void setUserRestriction(String p1, boolean p2, int p3){
+	UserManagerService.checkManageUsersPermission("setUserRestriction");
+	boolean v2 = UserRestrictionsUtils.isValidRestriction(p1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p3);
+	Bundle v4 = BundleUtils.clone(v3);
+	v4.putBoolean(p1, p2);
+	p0.updateUserRestrictionsInternalLR(v4, p3);
+	return;
+}
+-----
+depth : 2
+public void checkManageUsersPermission(String p1){
+	boolean v1 = UserManagerService.hasManageUsersPermission();
+	return;
+}
+-----
+depth : 2
+public boolean isValidRestriction(String p1){
+	boolean v1 = this.USER_RESTRICTIONS.contains(p1);
+	int v2 = Binder.getCallingUid();
+	IPackageManager v3 = AppGlobals.getPackageManager();
+	String v4 = v3.getPackagesForUid(v2);
+	StringBuilder v4 = new StringBuilder("Unknown restriction queried by uid ");
+	StringBuilder v6 = v4.append(v2);
+	StringBuilder v7 = v4.append(" (");
+	StringBuilder v8 = v4.append(phiInstruction[0]);
+	StringBuilder v9 = v4.append(" et al");
+	StringBuilder v10 = v4.append(")");
+	StringBuilder v11 = v4.append(": ");
+	StringBuilder v12 = v4.append(p1);
+	boolean v13 = UserRestrictionsUtils.isSystemApp(v2, phiInstruction);
+	String v14 = v4.toString();
+	int v15 = Slog.wtf("UserRestrictionsUtils", v14);
+	return 0;
+}
+-----
+depth : 2
+public Bundle getRestrictions(int p1){
+	Object v1 = this.mUserRestrictions.get(p1);
+	return v1;
+}
+-----
+depth : 2
+public Bundle clone(Bundle p1){
+	Bundle v0 = new Bundle(p1);
+	return v0;
+}
+-----
+depth : 2
+public void updateUserRestrictionsInternalLR(Bundle p1, int p2){
+	Bundle v1 = this.mAppliedUserRestrictions.getRestrictions(p2);
+	Bundle v2 = UserRestrictionsUtils.nonNull(v1);
+	Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	Bundle v5 = this.mCachedEffectiveUserRestrictions.getRestrictions(p2);
+	Preconditions.checkState(phiInstruction);
+	boolean v7 = this.mBaseUserRestrictions.updateRestrictions(p2, p1);
+	UserManagerService$UserData v8 = p0.getUserDataNoChecks(p2);
+	p0.scheduleWriteUser(v8);
+	Bundle v10 = p0.computeEffectiveUserRestrictionsLR(p2);
+	boolean v11 = this.mCachedEffectiveUserRestrictions.updateRestrictions(p2, v10);
+	UserManagerService$3 v11 = new UserManagerService$3(p0,v10,p2);
+	boolean v13 = this.mHandler.post(v11);
+	p0.propagateUserRestrictionsLR(p2, v10, v2);
+	Bundle v14 = new Bundle(v10);
+	boolean v16 = this.mAppliedUserRestrictions.updateRestrictions(p2, v14);
+	return;
+}
+-----
+
+and the following sink code:
+['UserInfo v2 = p0.createProfileForUserWithThrow(p1, "android.os.usertype.full.RESTRICTED", 0, p2, 0);\nreturn v2;', 'p0.setUserRestriction("no_modify_accounts", 1, UserInfo.id);\nBundle v3 = this.mBaseUserRestrictions.getRestrictions(p3);\nBundle v4 = BundleUtils.clone(v3);\nv4.putBoolean(p1, p2);\np0.updateUserRestrictionsInternalLR(v4, p3);']
+
+The method createRestrictedProfileWithThrow has the following similar APIs:
+
+- API Name: setUserRestriction(Ljava/lang/String;ZI)V with Similarity Score: 0.910153329372406
+  - Access Control Level: SYS_OR_SIG and the following code:
+boolean v2 = UserRestrictionsUtils.isValidRestriction(p1);
+Bundle v3 = this.mBaseUserRestrictions.getRestrictions(p3);
+Bundle v4 = BundleUtils.clone(v3);
+v4.putBoolean(p1, p2);
+p0.updateUserRestrictionsInternalLR(v4, p3);
+
+- API Name: removeUserWhenPossible(IZ)I with Similarity Score: 0.8586581349372864
+  - Access Control Level: SYS_OR_SIG and the following code:
+Bundle v4 = p0.getUserRestrictions(v3);
+p0.checkManageOrInteractPermissionIfCallerInOtherProfileGroup(p1, "getUserRestrictions");
+Bundle v2 = p0.getEffectiveUserRestrictions(p1);
+boolean v3 = this.mCachedEffectiveUserRestrictions.updateRestrictions(p1, v2);
+
