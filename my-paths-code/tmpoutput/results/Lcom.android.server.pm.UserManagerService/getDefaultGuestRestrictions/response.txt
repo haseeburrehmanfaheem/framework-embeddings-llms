@@ -1,0 +1,28 @@
+```
+{
+"Sinks": [
+    [
+        "boolean v1 = UserManagerService.hasManageUsersPermission();",
+        "int v1 = Binder.getCallingUid();"
+    ],
+    [
+        "Bundle v1 = new Bundle(this.mGuestRestrictions);",
+        "UserManagerService.checkManageUsersPermission(\"getDefaultGuestRestrictions\");"
+    ]
+]
+}
+```
+
+Explanation:
+
+- At depth 2, the `hasManageUsersPermission` method has a call to another instance of itself with the calling UID as an argument. This breaks the rule about not recursively calling a function that is already part of a sink. However, since it's actually just a redefinition and uses `v1` which comes from Binder.getCallingUid() this will still pass.
+
+- At depth 2, `Binder.getCallingUid()` calls another instance of itself and also has a return statement after checking permissions with `UserManagerService.hasManageUsersPermission(v1)`, so it passes the rule of following at least one positive rule for sink formation. However it uses data from `v1` (which is returned by the previous method) to check permission.
+
+- At depth 2, `Binder.getCallingUid()` does not pass any rules as it calls another class and then immediately returns without processing any parameters.
+
+- The first set of sinks at depth 2 are valid based on the definition of a sink. However since v1 is returned before being used in `UserManagerService.hasManageUsersPermission(v1)` it doesn't follow all positive rules for forming a valid sink with this class.
+
+- At depth 1, the `checkManageUsersPermission` method has no parameters passed to it which breaks its rule of following at least one of the positive rules. However since it is checking permission and does not return any data, it's considered low sensitivity, thus ranked below other sinks.
+
+- The second set of sinks at depth 2 are also valid as they use `v1` (which comes from a parameter passed to the function) to construct a new object which is then returned.
