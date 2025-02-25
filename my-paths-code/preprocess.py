@@ -27,7 +27,7 @@ def process_csv_files(csv_directory):
                         method = row['Method'].strip('"')
                         depth = row['Depth'].strip('"')
                         trace = row['Trace Instruction(s) ...'].strip('"')
-                        java_code = row['Java Code Representation'].strip('"')
+                        java_code = row['Code Merged'].strip('"')
                         access_control_level = row['Access Control Level'].strip('"')
                         key = (service_name, class_name, method, access_control_level)
                         
@@ -78,18 +78,91 @@ def run_ollama_prompt(method_code, model_name, sys_prompt, num_ctx):
         "response": response['message']['content']
     }
 
+def remove_comments(json_string):
+    """Remove single-line comments (//) from the JSON string."""
+    return re.sub(r'//.*', '', json_string)
+
+def try_extract_and_parse(pattern, input_string):
+    """Extract using the given regex pattern and parse JSON after cleaning comments."""
+    json_blocks = re.findall(pattern, input_string, re.DOTALL)
+    for block in reversed(json_blocks):
+        cleaned_block = remove_comments(block).strip()
+        try:
+            return json.loads(cleaned_block)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+def try_extract_boxed_json(input_string):
+    """
+    Try to extract JSON from LaTeX-style boxed expressions of the form:
+    $\boxed{ ... }$
+    """
+    boxed_blocks = re.findall(r'\$\s*\\boxed\s*\{(.*?)\}\s*\$', input_string, re.DOTALL)
+    for block in boxed_blocks:
+        cleaned_block = remove_comments(block).strip()
+        # Unescape any escaped braces if needed
+        cleaned_block = cleaned_block.replace(r'\{', '{').replace(r'\}', '}')
+        try:
+            return json.loads(cleaned_block)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+def try_extract_curly_braces(input_string):
+    """
+    Final fallback: Look for the first substring that starts with '{' and ends with '}'.
+    """
+    match = re.search(r'(\{.*\})', input_string, re.DOTALL)
+    if match:
+        cleaned_block = remove_comments(match.group(1)).strip()
+        try:
+            return json.loads(cleaned_block)
+        except json.JSONDecodeError:
+            return None
+    return None
+
 def extract_json_from_string(input_string):
-    """Extract JSON from response string."""
+    """
+    Extract JSON from a response string by trying, in order:
+      1. Code blocks explicitly tagged as JSON (```json).
+      2. Any code blocks delimited by triple backticks (```).
+      3. The entire string (if valid JSON).
+      4. LaTeX-style boxed JSON (e.g. $\boxed{ ... }$).
+      5. The first substring that starts with '{' and ends with '}'.
+    """
+    # 1. Try blocks tagged explicitly as JSON
+    pattern_json = r"```json\s*\n(.*?)```"
+    result = try_extract_and_parse(pattern_json, input_string)
+    if result is not None:
+        return result
+
+    # 2. Fallback: try any block delimited by triple backticks
+    pattern_any = r"```\s*\n(.*?)```"
+    result = try_extract_and_parse(pattern_any, input_string)
+    if result is not None:
+        return result
+
+    # 3. Try parsing the entire input string as JSON
     try:
-        json_pattern = r"```(?:json)?\n(.*?)\n```"
-        match = re.search(json_pattern, input_string, re.DOTALL)
-        return json.loads(match.group(1)) if match else None
+        cleaned_input = remove_comments(input_string).strip()
+        return json.loads(cleaned_input)
     except json.JSONDecodeError:
-        return None
+        pass
+
+    # 4. Look for LaTeX-style boxed JSON (e.g. $\boxed{ ... }$)
+    result = try_extract_boxed_json(input_string)
+    if result is not None:
+        return result
+
+    # 5. Final fallback: search for a substring that starts with '{' and ends with '}'
+    return try_extract_curly_braces(input_string)
+
 
 def process_dataframe(df, output_folder, model_name, sys_prompt, num_ctx):
     """Process DataFrame and save results."""
     df['json_answer'] = None
+    df['res1'] = None
     
     for index, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing rows"):
         method_name = row['method'].split("(")[0]
@@ -98,9 +171,11 @@ def process_dataframe(df, output_folder, model_name, sys_prompt, num_ctx):
 
         try:
             res = run_ollama_prompt(code_string, model_name, sys_prompt, num_ctx)
-            # df.at[index, 'json_answer'] = extract_json_from_string(res["response"])
+            df.at[index, 'res1'] = res['response']
+            df.at[index, 'json_answer'] = extract_json_from_string(res["response"])
+            # print(f"json_answer at this index is {df.at[index, 'json_answer']}")
             df["json_answer"] = df["json_answer"].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else str(x))
-            
+            print(f"json_answer at this index is {df.at[index, 'json_answer']}")
             folder_path = os.path.join(output_folder, service_name, method_name)
             os.makedirs(folder_path, exist_ok=True)
             
@@ -129,15 +204,26 @@ def main():
     with open(args.prompt, 'r') as f:
         sys_prompt = f.read().strip()
     model_name = "model1"
-    ollama.create(model=model_name,
-              from_=args.model,
-              system=sys_prompt.strip())
+    # ollama.create(model=model_name,
+    #           from_=args.model,
+    #           system=sys_prompt.strip())
+    
+    modelfile=f'''
+    FROM llama3.3
+    system """
+    {sys_prompt.strip()}
+    """
+    '''
+    
+    ollama.create(model=model_name, modelfile=modelfile)
+    
 
     df = process_csv_files(args.csv_dir)
     
     # if args.service_name:
-    df = df[df["service_name"] == "Lcom.android.server.pm.UserManagerService"]
-    
+    # df = df[df["service_name"] == "Lcom.android.server.pm.UserManagerService"]
+    df = df[:500]
+    print(f"length of df: {len(df)}")
     process_dataframe(
         df=df,
         output_folder=args.output_dir,

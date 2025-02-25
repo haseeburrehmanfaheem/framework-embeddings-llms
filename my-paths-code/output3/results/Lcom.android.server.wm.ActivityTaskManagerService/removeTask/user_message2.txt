@@ -1,0 +1,511 @@
+The method removeTask has the following code snippet:
+
+This is path 1 for the API with depth 2:
+depth : 0
+public boolean removeTask(int p1){
+	WindowManagerService.boostPriorityForLockedSection();
+	long v3 = Binder.clearCallingIdentity();
+	Task v4 = this.mRootWindowContainer.anyTaskForId(p1, 1);
+	boolean v5 = v4.isLeafTask();
+	this.mTaskSupervisor.removeTask(v4, 1, 1, "remove-task");
+	Binder.restoreCallingIdentity(v3);
+	WindowManagerService.resetPriorityAfterLockedSection();
+	return 1;
+}
+-----
+depth : 1
+public void boostPriorityForLockedSection(){
+	this.sThreadPriorityBooster.boost();
+	return;
+}
+-----
+depth : 2
+public void boost(){
+	return;
+}
+-----
+depth : 1
+public Task anyTaskForId(int p1, int p2){
+	Task v1 = p0.anyTaskForId(p1, p2, 0, 0);
+	return v1;
+}
+-----
+depth : 2
+public Task anyTaskForId(int p1, int p2, ActivityOptions p3, boolean p4){
+	AppTransition$$ExternalSyntheticLambda2 v0 = new AppTransition$$ExternalSyntheticLambda2();
+	ArgumentPlaceholder v2 = PooledLambda.__(Tas.class);
+	Integer v3 = Integer.valueOf(p1);
+	PooledPredicate v4 = PooledLambda.obtainPredicate(v0, v2, v3);
+	Task v5 = p0.getTask(v4);
+	v4.recycle();
+	Task v7 = p0.getOrCreateRootTask(0, p3, v5, p4);
+	Task v8 = v5.getRootTask();
+	boolean v9 = v5.reparent(v7, p4, phiInstruction, 1, 1, "anyTaskForId");
+	return v5;
+}
+-----
+depth : 1
+public boolean isLeafTask(){
+	int v1 = WindowContainer.mChildren.size();
+	Object v2 = WindowContainer.mChildren.get(phiInstruction);
+	Task v3 = v2.asTask();
+	return 0;
+}
+-----
+depth : 2
+public Task asTask(){
+	return 0;
+}
+-----
+depth : 1
+public void removeTask(Task p1, boolean p2, boolean p3, String p4){
+	WindowContainer.mTransitionController.requestCloseTransitionIfNeeded(p1);
+	Task.mInRemoveTask = 1;
+	p1.removeActivities(p4, 0);
+	p0.cleanUpRemovedTaskLocked(p1, p2, p3);
+	LockTaskController v4 = this.mService.getLockTaskController();
+	v4.clearLockedTask(p1);
+	TaskChangeNotificationController v6 = this.mService.getTaskChangeNotificationController();
+	v6.notifyTaskStackChanged();
+	this.mService.notifyTaskPersisterLocked(0, 1);
+	Task.mInRemoveTask = 0;
+	return;
+}
+-----
+depth : 2
+public void requestCloseTransitionIfNeeded(WindowContainer p1){
+	boolean v1 = p1.isVisibleRequested();
+	boolean v2 = p0.isCollecting();
+	Transition v3 = p0.createTransition(2, 0);
+	Task v4 = p1.asTask();
+	Transition v5 = p0.requestStartTransition(v3, v4, 0, 0);
+	p0.collectExistenceChange(p1);
+	return;
+}
+-----
+depth : 2
+public void removeActivities(String p1, boolean p2){
+	p0.clearPinnedTaskIfNeed();
+	Task v2 = p0.getRootTask();
+	Task$$ExternalSyntheticLambda2 v2 = new Task$$ExternalSyntheticLambda2(p0,p2,p1);
+	p0.forAllActivities(v2);
+	return;
+}
+-----
+depth : 2
+public void cleanUpRemovedTaskLocked(Task p1, boolean p2, boolean p3){
+	this.mRecentTasks.remove(p1);
+	Intent v2 = p1.getBaseIntent();
+	ComponentName v3 = v2.getComponent();
+	ActivityTaskSupervisor$$ExternalSyntheticLambda1 v3 = new ActivityTaskSupervisor$$ExternalSyntheticLambda1();
+	Integer v5 = Integer.valueOf(Task.mUserId);
+	Intent v5 = new Intent(v6);
+	Intent v6 = p1.getBaseIntent();
+	Message v8 = PooledLambda.obtainMessage(v3, ActivityTaskManagerService.mAmInternal, v5, v3, v5);
+	boolean v9 = ActivityTaskManagerService.mH.sendMessage(v8);
+	String v10 = v3.getPackageName();
+	ArrayList v10 = new ArrayList();
+	ArrayMap v12 = ActivityTaskManagerService.mProcessNames.getMap();
+	int v13 = v12.size();
+	Object v14 = v12.valueAt(phiInstruction);
+	int v15 = v14.size();
+	Object v16 = v14.valueAt(phiInstruction);
+	boolean v17 = WindowProcessController.mPkgList.contains(v10);
+	boolean v18 = v16.shouldKillProcessForRemovedTask(p1);
+	return;
+}
+-----
+depth : 2
+public LockTaskController getLockTaskController(){
+	return this.mLockTaskController;
+}
+-----
+depth : 2
+public void clearLockedTask(Task p1){
+	boolean v1 = this.mLockTaskModeTasks.isEmpty();
+	Object v2 = this.mLockTaskModeTasks.get(0);
+	int v3 = this.mLockTaskModeTasks.size();
+	p0.removeLockedTask(p1);
+	boolean v5 = this.mLockTaskModeTasks.isEmpty();
+	p1.performClearTaskForReuse(0);
+	boolean v7 = ActivityTaskSupervisor.mRootWindowContainer.resumeFocusedTasksTopActivities();
+	return;
+}
+-----
+depth : 2
+public TaskChangeNotificationController getTaskChangeNotificationController(){
+	return this.mTaskChangeNotificationController;
+}
+-----
+depth : 2
+public void notifyTaskStackChanged(){
+	ActivityMetricsLogger v1 = this.mTaskSupervisor.getActivityMetricsLogger();
+	v1.logWindowState();
+	this.mHandler.removeMessages(2);
+	Message v4 = this.mHandler.obtainMessage(2);
+	p0.forAllLocalListeners(this.mNotifyTaskStackChanged, v4);
+	boolean v6 = this.mHandler.sendMessageDelayed(v4, 100);
+	return;
+}
+-----
+depth : 2
+public void notifyTaskPersisterLocked(Task p1, boolean p2){
+	this.mRecentTasks.notifyTaskPersisterLocked(p1, p2);
+	return;
+}
+-----
+depth : 1
+public void resetPriorityAfterLockedSection(){
+	this.sThreadPriorityBooster.reset();
+	return;
+}
+-----
+depth : 2
+public void reset(){
+	return;
+}
+-----
+This is path 2 for the API with depth 2:
+depth : 0
+public boolean removeTask(int p1){
+	WindowManagerService.boostPriorityForLockedSection();
+	long v3 = Binder.clearCallingIdentity();
+	Task v4 = this.mRootWindowContainer.anyTaskForId(p1, 1);
+	boolean v5 = v4.isLeafTask();
+	this.mTaskSupervisor.removeTask(v4, 1, 1, "remove-task");
+	Binder.restoreCallingIdentity(v3);
+	WindowManagerService.resetPriorityAfterLockedSection();
+	return 1;
+}
+-----
+depth : 1
+public void boostPriorityForLockedSection(){
+	this.sThreadPriorityBooster.boost();
+	return;
+}
+-----
+depth : 2
+public void boost(){
+	p0.boost();
+	return;
+}
+-----
+depth : 1
+public Task anyTaskForId(int p1, int p2){
+	Task v1 = p0.anyTaskForId(p1, p2, 0, 0);
+	return v1;
+}
+-----
+depth : 2
+public Task anyTaskForId(int p1, int p2, ActivityOptions p3, boolean p4){
+	AppTransition$$ExternalSyntheticLambda2 v0 = new AppTransition$$ExternalSyntheticLambda2();
+	ArgumentPlaceholder v2 = PooledLambda.__(Tas.class);
+	Integer v3 = Integer.valueOf(p1);
+	PooledPredicate v4 = PooledLambda.obtainPredicate(v0, v2, v3);
+	Task v5 = p0.getTask(v4);
+	v4.recycle();
+	Task v7 = p0.getOrCreateRootTask(0, p3, v5, p4);
+	Task v8 = v5.getRootTask();
+	boolean v9 = v5.reparent(v7, p4, phiInstruction, 1, 1, "anyTaskForId");
+	return v5;
+}
+-----
+depth : 1
+public boolean isLeafTask(){
+	int v1 = WindowContainer.mChildren.size();
+	Object v2 = WindowContainer.mChildren.get(phiInstruction);
+	Task v3 = v2.asTask();
+	return 0;
+}
+-----
+depth : 2
+public Task asTask(){
+	return 0;
+}
+-----
+depth : 1
+public void removeTask(Task p1, boolean p2, boolean p3, String p4){
+	WindowContainer.mTransitionController.requestCloseTransitionIfNeeded(p1);
+	Task.mInRemoveTask = 1;
+	p1.removeActivities(p4, 0);
+	p0.cleanUpRemovedTaskLocked(p1, p2, p3);
+	LockTaskController v4 = this.mService.getLockTaskController();
+	v4.clearLockedTask(p1);
+	TaskChangeNotificationController v6 = this.mService.getTaskChangeNotificationController();
+	v6.notifyTaskStackChanged();
+	this.mService.notifyTaskPersisterLocked(0, 1);
+	Task.mInRemoveTask = 0;
+	return;
+}
+-----
+depth : 2
+public void requestCloseTransitionIfNeeded(WindowContainer p1){
+	boolean v1 = p1.isVisibleRequested();
+	boolean v2 = p0.isCollecting();
+	Transition v3 = p0.createTransition(2, 0);
+	Task v4 = p1.asTask();
+	Transition v5 = p0.requestStartTransition(v3, v4, 0, 0);
+	p0.collectExistenceChange(p1);
+	return;
+}
+-----
+depth : 2
+public void removeActivities(String p1, boolean p2){
+	p0.clearPinnedTaskIfNeed();
+	Task v2 = p0.getRootTask();
+	Task$$ExternalSyntheticLambda2 v2 = new Task$$ExternalSyntheticLambda2(p0,p2,p1);
+	p0.forAllActivities(v2);
+	return;
+}
+-----
+depth : 2
+public void cleanUpRemovedTaskLocked(Task p1, boolean p2, boolean p3){
+	this.mRecentTasks.remove(p1);
+	Intent v2 = p1.getBaseIntent();
+	ComponentName v3 = v2.getComponent();
+	ActivityTaskSupervisor$$ExternalSyntheticLambda1 v3 = new ActivityTaskSupervisor$$ExternalSyntheticLambda1();
+	Integer v5 = Integer.valueOf(Task.mUserId);
+	Intent v5 = new Intent(v6);
+	Intent v6 = p1.getBaseIntent();
+	Message v8 = PooledLambda.obtainMessage(v3, ActivityTaskManagerService.mAmInternal, v5, v3, v5);
+	boolean v9 = ActivityTaskManagerService.mH.sendMessage(v8);
+	String v10 = v3.getPackageName();
+	ArrayList v10 = new ArrayList();
+	ArrayMap v12 = ActivityTaskManagerService.mProcessNames.getMap();
+	int v13 = v12.size();
+	Object v14 = v12.valueAt(phiInstruction);
+	int v15 = v14.size();
+	Object v16 = v14.valueAt(phiInstruction);
+	boolean v17 = WindowProcessController.mPkgList.contains(v10);
+	boolean v18 = v16.shouldKillProcessForRemovedTask(p1);
+	return;
+}
+-----
+depth : 2
+public LockTaskController getLockTaskController(){
+	return this.mLockTaskController;
+}
+-----
+depth : 2
+public void clearLockedTask(Task p1){
+	boolean v1 = this.mLockTaskModeTasks.isEmpty();
+	Object v2 = this.mLockTaskModeTasks.get(0);
+	int v3 = this.mLockTaskModeTasks.size();
+	p0.removeLockedTask(p1);
+	boolean v5 = this.mLockTaskModeTasks.isEmpty();
+	p1.performClearTaskForReuse(0);
+	boolean v7 = ActivityTaskSupervisor.mRootWindowContainer.resumeFocusedTasksTopActivities();
+	return;
+}
+-----
+depth : 2
+public TaskChangeNotificationController getTaskChangeNotificationController(){
+	return this.mTaskChangeNotificationController;
+}
+-----
+depth : 2
+public void notifyTaskStackChanged(){
+	ActivityMetricsLogger v1 = this.mTaskSupervisor.getActivityMetricsLogger();
+	v1.logWindowState();
+	this.mHandler.removeMessages(2);
+	Message v4 = this.mHandler.obtainMessage(2);
+	p0.forAllLocalListeners(this.mNotifyTaskStackChanged, v4);
+	boolean v6 = this.mHandler.sendMessageDelayed(v4, 100);
+	return;
+}
+-----
+depth : 2
+public void notifyTaskPersisterLocked(Task p1, boolean p2){
+	this.mRecentTasks.notifyTaskPersisterLocked(p1, p2);
+	return;
+}
+-----
+depth : 1
+public void resetPriorityAfterLockedSection(){
+	this.sThreadPriorityBooster.reset();
+	return;
+}
+-----
+depth : 2
+public void reset(){
+	return;
+}
+-----
+This is path 3 for the API with depth 2:
+depth : 0
+public boolean removeTask(int p1){
+	WindowManagerService.boostPriorityForLockedSection();
+	long v3 = Binder.clearCallingIdentity();
+	Task v4 = this.mRootWindowContainer.anyTaskForId(p1, 1);
+	boolean v5 = v4.isLeafTask();
+	this.mTaskSupervisor.removeTask(v4, 1, 1, "remove-task");
+	Binder.restoreCallingIdentity(v3);
+	WindowManagerService.resetPriorityAfterLockedSection();
+	return 1;
+}
+-----
+depth : 1
+public void boostPriorityForLockedSection(){
+	this.sThreadPriorityBooster.boost();
+	return;
+}
+-----
+depth : 2
+public void boost(){
+	return;
+}
+-----
+depth : 1
+public Task anyTaskForId(int p1, int p2){
+	Task v1 = p0.anyTaskForId(p1, p2, 0, 0);
+	return v1;
+}
+-----
+depth : 2
+public Task anyTaskForId(int p1, int p2, ActivityOptions p3, boolean p4){
+	AppTransition$$ExternalSyntheticLambda2 v0 = new AppTransition$$ExternalSyntheticLambda2();
+	ArgumentPlaceholder v2 = PooledLambda.__(Tas.class);
+	Integer v3 = Integer.valueOf(p1);
+	PooledPredicate v4 = PooledLambda.obtainPredicate(v0, v2, v3);
+	Task v5 = p0.getTask(v4);
+	v4.recycle();
+	Task v7 = p0.getOrCreateRootTask(0, p3, v5, p4);
+	Task v8 = v5.getRootTask();
+	boolean v9 = v5.reparent(v7, p4, phiInstruction, 1, 1, "anyTaskForId");
+	return v5;
+}
+-----
+depth : 1
+public boolean isLeafTask(){
+	int v1 = WindowContainer.mChildren.size();
+	Object v2 = WindowContainer.mChildren.get(phiInstruction);
+	Task v3 = v2.asTask();
+	return 0;
+}
+-----
+depth : 2
+public Task asTask(){
+	return 0;
+}
+-----
+depth : 1
+public void removeTask(Task p1, boolean p2, boolean p3, String p4){
+	WindowContainer.mTransitionController.requestCloseTransitionIfNeeded(p1);
+	Task.mInRemoveTask = 1;
+	p1.removeActivities(p4, 0);
+	p0.cleanUpRemovedTaskLocked(p1, p2, p3);
+	LockTaskController v4 = this.mService.getLockTaskController();
+	v4.clearLockedTask(p1);
+	TaskChangeNotificationController v6 = this.mService.getTaskChangeNotificationController();
+	v6.notifyTaskStackChanged();
+	this.mService.notifyTaskPersisterLocked(0, 1);
+	Task.mInRemoveTask = 0;
+	return;
+}
+-----
+depth : 2
+public void requestCloseTransitionIfNeeded(WindowContainer p1){
+	boolean v1 = p1.isVisibleRequested();
+	boolean v2 = p0.isCollecting();
+	Transition v3 = p0.createTransition(2, 0);
+	Task v4 = p1.asTask();
+	Transition v5 = p0.requestStartTransition(v3, v4, 0, 0);
+	p0.collectExistenceChange(p1);
+	return;
+}
+-----
+depth : 2
+public void removeActivities(String p1, boolean p2){
+	p0.clearPinnedTaskIfNeed();
+	Task v2 = p0.getRootTask();
+	Task$$ExternalSyntheticLambda2 v2 = new Task$$ExternalSyntheticLambda2(p0,p2,p1);
+	p0.forAllActivities(v2);
+	return;
+}
+-----
+depth : 2
+public void cleanUpRemovedTaskLocked(Task p1, boolean p2, boolean p3){
+	this.mRecentTasks.remove(p1);
+	Intent v2 = p1.getBaseIntent();
+	ComponentName v3 = v2.getComponent();
+	ActivityTaskSupervisor$$ExternalSyntheticLambda1 v3 = new ActivityTaskSupervisor$$ExternalSyntheticLambda1();
+	Integer v5 = Integer.valueOf(Task.mUserId);
+	Intent v5 = new Intent(v6);
+	Intent v6 = p1.getBaseIntent();
+	Message v8 = PooledLambda.obtainMessage(v3, ActivityTaskManagerService.mAmInternal, v5, v3, v5);
+	boolean v9 = ActivityTaskManagerService.mH.sendMessage(v8);
+	String v10 = v3.getPackageName();
+	ArrayList v10 = new ArrayList();
+	ArrayMap v12 = ActivityTaskManagerService.mProcessNames.getMap();
+	int v13 = v12.size();
+	Object v14 = v12.valueAt(phiInstruction);
+	int v15 = v14.size();
+	Object v16 = v14.valueAt(phiInstruction);
+	boolean v17 = WindowProcessController.mPkgList.contains(v10);
+	boolean v18 = v16.shouldKillProcessForRemovedTask(p1);
+	return;
+}
+-----
+depth : 2
+public LockTaskController getLockTaskController(){
+	return this.mLockTaskController;
+}
+-----
+depth : 2
+public void clearLockedTask(Task p1){
+	boolean v1 = this.mLockTaskModeTasks.isEmpty();
+	Object v2 = this.mLockTaskModeTasks.get(0);
+	int v3 = this.mLockTaskModeTasks.size();
+	p0.removeLockedTask(p1);
+	boolean v5 = this.mLockTaskModeTasks.isEmpty();
+	p1.performClearTaskForReuse(0);
+	boolean v7 = ActivityTaskSupervisor.mRootWindowContainer.resumeFocusedTasksTopActivities();
+	return;
+}
+-----
+depth : 2
+public TaskChangeNotificationController getTaskChangeNotificationController(){
+	return this.mTaskChangeNotificationController;
+}
+-----
+depth : 2
+public void notifyTaskStackChanged(){
+	ActivityMetricsLogger v1 = this.mTaskSupervisor.getActivityMetricsLogger();
+	v1.logWindowState();
+	this.mHandler.removeMessages(2);
+	Message v4 = this.mHandler.obtainMessage(2);
+	p0.forAllLocalListeners(this.mNotifyTaskStackChanged, v4);
+	boolean v6 = this.mHandler.sendMessageDelayed(v4, 100);
+	return;
+}
+-----
+depth : 2
+public void notifyTaskPersisterLocked(Task p1, boolean p2){
+	this.mRecentTasks.notifyTaskPersisterLocked(p1, p2);
+	return;
+}
+-----
+depth : 1
+public void resetPriorityAfterLockedSection(){
+	this.sThreadPriorityBooster.reset();
+	return;
+}
+-----
+depth : 2
+public void reset(){
+	p0.reset();
+	return;
+}
+-----
+
+and the following sink code:
+['Task v4 = this.mRootWindowContainer.anyTaskForId(p1, 1);\nboolean v5 = v4.isLeafTask();\nthis.mTaskSupervisor.removeTask(v4, 1, 1, "remove-task");']
+
+The method removeTask has the following similar APIs:
+
+- API Name: moveTaskToRootTask(IIZ)V with Similarity Score: 0.851344108581543
+  - Access Control Level: SYS_OR_SIG and the following code:
+Task v4 = this.mRootWindowContainer.anyTaskForId(p1);
+Task v9 = this.mRootWindowContainer.getRootTask(p2);
+boolean v11 = v4.reparent(v9, p3, 1, 1, 0, "moveTaskToRootTask");
+

@@ -1,0 +1,247 @@
+The method checkCredential has the following code snippet:
+
+This is path 1 for the API with depth 2:
+depth : 0
+public VerifyCredentialResponse checkCredential(LockscreenCredential p1, int p2, ICheckCredentialProgressCallback p3){
+	p0.checkPasswordReadPermission();
+	VerifyCredentialResponse v2 = p0.doVerifyCredential(p1, p2, p3, 0);
+	p0.scheduleGc();
+	return v2;
+}
+-----
+depth : 1
+public void checkPasswordReadPermission(){
+	return;
+}
+-----
+depth : 1
+public VerifyCredentialResponse doVerifyCredential(LockscreenCredential p1, int p2, ICheckCredentialProgressCallback p3, int p4){
+	boolean v1 = p1.isNone();
+	ContentResolver v2 = this.mContext.getContentResolver();
+	int v3 = this.mInjector.settingsGlobalGetInt(v2, "device_provisioned", 0);
+	VerifyCredentialResponse v4 = p0.spBasedDoVerifyCredential(p1, p2, p3, p4);
+	LockSettingsStorage$CredentialHash v5 = this.mStorage.readCredentialHash(p2);
+	boolean v6 = p1.checkAgainstStoredType(LockSettingsStorage$CredentialHash.type);
+	VerifyCredentialResponse v7 = p0.verifyCredential(p2, v5, p1, p3);
+	int v8 = v7.getResponseCode();
+	this.mStrongAuth.reportSuccessfulStrongAuthUnlock(p2);
+	return v7;
+}
+-----
+depth : 2
+public int settingsGlobalGetInt(ContentResolver p1, String p2, int p3){
+	int v1 = Settings$Global.getInt(p1, p2, p3);
+	return v1;
+}
+-----
+depth : 2
+public VerifyCredentialResponse spBasedDoVerifyCredential(LockscreenCredential p1, int p2, ICheckCredentialProgressCallback p3, int p4){
+	boolean v1 = this.mInjector.hasEnrolledBiometrics(p2);
+	StringBuilder v1 = new StringBuilder();
+	StringBuilder v3 = v1.append("spBasedDoVerifyCredential: user=");
+	StringBuilder v4 = v1.append(p2);
+	StringBuilder v5 = v1.append(" hasEnrolledBiometrics=");
+	StringBuilder v6 = v1.append(v1);
+	String v7 = v1.toString();
+	int v8 = Slog.d("LockSettingsService", v7);
+	boolean v9 = p0.isSyntheticPasswordBasedCredentialLocked(p2);
+	long v10 = p0.getSyntheticPasswordHandleLocked(p2);
+	IGateKeeperService v11 = p0.getGateKeeperService();
+	SyntheticPasswordManager$AuthenticationResult v12 = this.mSpManager.unwrapPasswordBasedSyntheticPassword(v11, v10, p1, p2, p3);
+	int v13 = SyntheticPasswordManager$AuthenticationResult.gkResponse.getResponseCode();
+	byte[] v14 = SyntheticPasswordManager$AuthenticationResult.authToken.deriveGkPassword();
+	this.mBiometricDeferredQueue.addPendingLockoutResetForUser(p2, v14);
+	IGateKeeperService v16 = p0.getGateKeeperService();
+	VerifyCredentialResponse v17 = this.mSpManager.verifyChallenge(v16, SyntheticPasswordManager$AuthenticationResult.authToken, 0, p2);
+	int v18 = v17.getResponseCode();
+	int v19 = Slog.wtf("LockSettingsService", "verifyChallenge with SP failed.");
+	return VerifyCredentialResponse.ERROR;
+}
+-----
+depth : 2
+public LockSettingsStorage$CredentialHash readCredentialHash(int p1){
+	LockSettingsStorage$CredentialHash v1 = p0.readPasswordHashIfExists(p1);
+	LockSettingsStorage$CredentialHash v2 = p0.readPatternHashIfExists(p1);
+	LockSettingsStorage$CredentialHash v3 = LockSettingsStorage$CredentialHash.createEmptyHash();
+	return v3;
+}
+-----
+depth : 2
+public boolean checkAgainstStoredType(int p1){
+	int v1 = p0.getType();
+	int v2 = p0.getType();
+	return phiInstruction;
+}
+-----
+depth : 2
+public VerifyCredentialResponse verifyCredential(int p1, LockSettingsStorage$CredentialHash p2, LockscreenCredential p3, ICheckCredentialProgressCallback p4){
+	boolean v1 = p3.isNone();
+	boolean v2 = p3.isNone();
+	StrictMode.noteDiskRead();
+	IGateKeeperService v4 = p0.getGateKeeperService();
+	byte[] v5 = p3.getCredential();
+	GateKeeperResponse v6 = v4.verifyChallenge(p1, 0, LockSettingsStorage$CredentialHash.hash, v5);
+	int v7 = Slog.e("LockSettingsService", "gatekeeper verify failed", caughtException);
+	VerifyCredentialResponse v8 = p0.convertResponse(phiInstruction);
+	boolean v9 = phiInstruction.getShouldReEnroll();
+	int v10 = v8.getResponseCode();
+	p4.onCredentialVerified();
+	int v12 = Slog.w("LockSettingsService", "progressCallback throws exception", caughtException);
+	p0.setUserPasswordMetrics(p3, p1);
+	byte[] v14 = p3.getCredential();
+	p0.unlockKeystore(v14, p1);
+	StringBuilder v15 = new StringBuilder();
+	StringBuilder v17 = v15.append("Unlocking user ");
+	StringBuilder v18 = v15.append(p1);
+	String v19 = v15.toString();
+	int v20 = Slog.i("LockSettingsService", v19);
+	byte[] v21 = LockSettingsService.secretFromCredential(p3);
+	p0.unlockUser(p1, v21);
+	boolean v23 = p0.isProfileWithSeparatedLock(p1);
+	p0.setDeviceUnlockedForUser(p1);
+	boolean v25 = p0.setLockCredentialInternal(p3, p3, p1, 0);
+	p0.sendCredentialsOnUnlockIfRequired(p3, p1);
+	return v8;
+}
+-----
+depth : 2
+public int getResponseCode(){
+	return this.mResponseCode;
+}
+-----
+depth : 2
+public void reportSuccessfulStrongAuthUnlock(int p1){
+	Message v1 = this.mHandler.obtainMessage(5, p1, 0);
+	v1.sendToTarget();
+	return;
+}
+-----
+This is path 2 for the API with depth 2:
+depth : 0
+public VerifyCredentialResponse checkCredential(LockscreenCredential p1, int p2, ICheckCredentialProgressCallback p3){
+	p0.checkPasswordReadPermission();
+	VerifyCredentialResponse v2 = p0.doVerifyCredential(p1, p2, p3, 0);
+	p0.scheduleGc();
+	return v2;
+}
+-----
+depth : 1
+public void checkPasswordReadPermission(){
+	return;
+}
+-----
+depth : 1
+public VerifyCredentialResponse doVerifyCredential(LockscreenCredential p1, int p2, ICheckCredentialProgressCallback p3, int p4){
+	boolean v1 = p1.isNone();
+	ContentResolver v2 = this.mContext.getContentResolver();
+	int v3 = this.mInjector.settingsGlobalGetInt(v2, "device_provisioned", 0);
+	VerifyCredentialResponse v4 = p0.spBasedDoVerifyCredential(p1, p2, p3, p4);
+	LockSettingsStorage$CredentialHash v5 = this.mStorage.readCredentialHash(p2);
+	boolean v6 = p1.checkAgainstStoredType(LockSettingsStorage$CredentialHash.type);
+	VerifyCredentialResponse v7 = p0.verifyCredential(p2, v5, p1, p3);
+	int v8 = v7.getResponseCode();
+	this.mStrongAuth.reportSuccessfulStrongAuthUnlock(p2);
+	return v7;
+}
+-----
+depth : 2
+public int settingsGlobalGetInt(ContentResolver p1, String p2, int p3){
+	int v1 = Settings$Global.getInt(p1, p2, p3);
+	return v1;
+}
+-----
+depth : 2
+public VerifyCredentialResponse spBasedDoVerifyCredential(LockscreenCredential p1, int p2, ICheckCredentialProgressCallback p3, int p4){
+	boolean v1 = this.mInjector.hasEnrolledBiometrics(p2);
+	StringBuilder v1 = new StringBuilder();
+	StringBuilder v3 = v1.append("spBasedDoVerifyCredential: user=");
+	StringBuilder v4 = v1.append(p2);
+	StringBuilder v5 = v1.append(" hasEnrolledBiometrics=");
+	StringBuilder v6 = v1.append(v1);
+	String v7 = v1.toString();
+	int v8 = Slog.d("LockSettingsService", v7);
+	boolean v9 = p0.isSyntheticPasswordBasedCredentialLocked(p2);
+	long v10 = p0.getSyntheticPasswordHandleLocked(p2);
+	IGateKeeperService v11 = p0.getGateKeeperService();
+	SyntheticPasswordManager$AuthenticationResult v12 = this.mSpManager.unwrapPasswordBasedSyntheticPassword(v11, v10, p1, p2, p3);
+	int v13 = SyntheticPasswordManager$AuthenticationResult.gkResponse.getResponseCode();
+	byte[] v14 = SyntheticPasswordManager$AuthenticationResult.authToken.deriveGkPassword();
+	this.mBiometricDeferredQueue.addPendingLockoutResetForUser(p2, v14);
+	IGateKeeperService v16 = p0.getGateKeeperService();
+	VerifyCredentialResponse v17 = this.mSpManager.verifyChallenge(v16, SyntheticPasswordManager$AuthenticationResult.authToken, 0, p2);
+	int v18 = v17.getResponseCode();
+	int v19 = Slog.wtf("LockSettingsService", "verifyChallenge with SP failed.");
+	return VerifyCredentialResponse.ERROR;
+}
+-----
+depth : 2
+public LockSettingsStorage$CredentialHash readCredentialHash(int p1){
+	LockSettingsStorage$CredentialHash v1 = p0.readPasswordHashIfExists(p1);
+	LockSettingsStorage$CredentialHash v2 = p0.readPatternHashIfExists(p1);
+	return v2;
+}
+-----
+depth : 2
+public boolean checkAgainstStoredType(int p1){
+	int v1 = p0.getType();
+	int v2 = p0.getType();
+	return phiInstruction;
+}
+-----
+depth : 2
+public VerifyCredentialResponse verifyCredential(int p1, LockSettingsStorage$CredentialHash p2, LockscreenCredential p3, ICheckCredentialProgressCallback p4){
+	boolean v1 = p3.isNone();
+	boolean v2 = p3.isNone();
+	StrictMode.noteDiskRead();
+	IGateKeeperService v4 = p0.getGateKeeperService();
+	byte[] v5 = p3.getCredential();
+	GateKeeperResponse v6 = v4.verifyChallenge(p1, 0, LockSettingsStorage$CredentialHash.hash, v5);
+	int v7 = Slog.e("LockSettingsService", "gatekeeper verify failed", caughtException);
+	VerifyCredentialResponse v8 = p0.convertResponse(phiInstruction);
+	boolean v9 = phiInstruction.getShouldReEnroll();
+	int v10 = v8.getResponseCode();
+	p4.onCredentialVerified();
+	int v12 = Slog.w("LockSettingsService", "progressCallback throws exception", caughtException);
+	p0.setUserPasswordMetrics(p3, p1);
+	byte[] v14 = p3.getCredential();
+	p0.unlockKeystore(v14, p1);
+	StringBuilder v15 = new StringBuilder();
+	StringBuilder v17 = v15.append("Unlocking user ");
+	StringBuilder v18 = v15.append(p1);
+	String v19 = v15.toString();
+	int v20 = Slog.i("LockSettingsService", v19);
+	byte[] v21 = LockSettingsService.secretFromCredential(p3);
+	p0.unlockUser(p1, v21);
+	boolean v23 = p0.isProfileWithSeparatedLock(p1);
+	p0.setDeviceUnlockedForUser(p1);
+	boolean v25 = p0.setLockCredentialInternal(p3, p3, p1, 0);
+	p0.sendCredentialsOnUnlockIfRequired(p3, p1);
+	return v8;
+}
+-----
+depth : 2
+public int getResponseCode(){
+	return this.mResponseCode;
+}
+-----
+depth : 2
+public void reportSuccessfulStrongAuthUnlock(int p1){
+	Message v1 = this.mHandler.obtainMessage(5, p1, 0);
+	v1.sendToTarget();
+	return;
+}
+-----
+
+and the following sink code:
+['VerifyCredentialResponse v2 = p0.doVerifyCredential(p1, p2, p3, 0);\nreturn v2;', 'VerifyCredentialResponse v4 = p0.spBasedDoVerifyCredential(p1, p2, p3, p4);\nVerifyCredentialResponse v7 = p0.verifyCredential(p2, v5, p1, p3);']
+
+The method checkCredential has the following similar APIs:
+
+- API Name: verifyCredential(Lcom/android/internal/widget/LockscreenCredential;II)Lcom/android/internal/widget/VerifyCredentialResponse; with Similarity Score: 0.9841635823249817
+  - Access Control Level: SYS_OR_SIG and the following code:
+VerifyCredentialResponse v4 = p0.doVerifyCredential(p1, p2, 0, p3);
+
+- API Name: verifyCredential(Lcom/android/internal/widget/LockscreenCredential;II)Lcom/android/internal/widget/VerifyCredentialResponse; with Similarity Score: 0.9427560567855835
+  - Access Control Level: SYS_OR_SIG and the following code:
+VerifyCredentialResponse v4 = p0.doVerifyCredential(p1, p2, 0, p3);
+

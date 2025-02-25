@@ -46,14 +46,86 @@ def get_java_code(row):
 
     return code_string
 
+def remove_comments(json_string):
+    """Remove single-line comments (//) from the JSON string."""
+    return re.sub(r'//.*', '', json_string)
+
+def try_extract_and_parse(pattern, input_string):
+    """Extract using the given regex pattern and parse JSON after cleaning comments."""
+    json_blocks = re.findall(pattern, input_string, re.DOTALL)
+    for block in reversed(json_blocks):
+        cleaned_block = remove_comments(block).strip()
+        try:
+            return json.loads(cleaned_block)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+def try_extract_boxed_json(input_string):
+    """
+    Try to extract JSON from LaTeX-style boxed expressions of the form:
+    $\boxed{ ... }$
+    """
+    boxed_blocks = re.findall(r'\$\s*\\boxed\s*\{(.*?)\}\s*\$', input_string, re.DOTALL)
+    for block in boxed_blocks:
+        cleaned_block = remove_comments(block).strip()
+        # Unescape any escaped braces if needed
+        cleaned_block = cleaned_block.replace(r'\{', '{').replace(r'\}', '}')
+        try:
+            return json.loads(cleaned_block)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+def try_extract_curly_braces(input_string):
+    """
+    Final fallback: Look for the first substring that starts with '{' and ends with '}'.
+    """
+    match = re.search(r'(\{.*\})', input_string, re.DOTALL)
+    if match:
+        cleaned_block = remove_comments(match.group(1)).strip()
+        try:
+            return json.loads(cleaned_block)
+        except json.JSONDecodeError:
+            return None
+    return None
+
 def extract_json_from_string(input_string):
-    """Extract JSON from response string."""
+    """
+    Extract JSON from a response string by trying, in order:
+      1. Code blocks explicitly tagged as JSON (```json).
+      2. Any code blocks delimited by triple backticks (```).
+      3. The entire string (if valid JSON).
+      4. LaTeX-style boxed JSON (e.g. $\boxed{ ... }$).
+      5. The first substring that starts with '{' and ends with '}'.
+    """
+    # 1. Try blocks tagged explicitly as JSON
+    pattern_json = r"```json\s*\n(.*?)```"
+    result = try_extract_and_parse(pattern_json, input_string)
+    if result is not None:
+        return result
+
+    # 2. Fallback: try any block delimited by triple backticks
+    pattern_any = r"```\s*\n(.*?)```"
+    result = try_extract_and_parse(pattern_any, input_string)
+    if result is not None:
+        return result
+
+    # 3. Try parsing the entire input string as JSON
     try:
-        json_pattern = r"```(?:json)?\n(.*?)\n```"
-        match = re.search(json_pattern, input_string, re.DOTALL)
-        return json.loads(match.group(1)) if match else {}
+        cleaned_input = remove_comments(input_string).strip()
+        return json.loads(cleaned_input)
     except json.JSONDecodeError:
-        return {}
+        pass
+
+    # 4. Look for LaTeX-style boxed JSON (e.g. $\boxed{ ... }$)
+    result = try_extract_boxed_json(input_string)
+    if result is not None:
+        return result
+
+    # 5. Final fallback: search for a substring that starts with '{' and ends with '}'
+    return try_extract_curly_braces(input_string)
+
 
 def get_code_embedding(code_snippet):
     """
@@ -73,9 +145,15 @@ def get_code_embedding(code_snippet):
     
     return embedding.cpu()
 
-def process_json_answer(json_answer, n=2):
+def process_json_answer(json_answer, n=float("inf")):
     global counter
     all = []
+    if isinstance(json_answer, str):  # If it's a string, parse it
+        try:
+            json_answer = json.loads(json_answer)
+        except json.JSONDecodeError:
+            # print("Invalid JSON format")
+            return []
     try:
         arrays = json_answer['Sinks']
         for i, array in enumerate(arrays, 1):
@@ -144,7 +222,7 @@ def compute_most_similar(df):
     
     return similarities
 
-def get_top_similar_methods(similarities, top_n=2, threshold=0.8):
+def get_top_similar_methods(similarities, top_n=2, threshold=0.7): # change threshold here
     filtered = [entry for entry in similarities if entry['similarity'] > threshold]
     sorted_results = sorted(filtered, key=lambda x: x['similarity'], reverse=True)
     top_results = sorted_results[:top_n]
@@ -246,7 +324,7 @@ def compute_80_top2(df):
             for i, emb1 in enumerate(ep1_embeddings):
                 for j, emb2 in enumerate(ep2_embeddings):
                     sim = torch.nn.functional.cosine_similarity(torch.tensor(emb1), torch.tensor(emb2), dim=0).item()
-                    if sim > 0.8:  # Only consider pairs with similarity > 0.8
+                    if sim > 0.5:   # Change threshold here, doesnt matter though because they will be filtered later on
                         similar_sink_pairs.append({
                             "similarity": sim,
                             "ep1_code": ep1_sink_code[i],
@@ -335,9 +413,14 @@ def write_csvs(similarities, CSV_FILE):
 
     print(f"Data has been written to {CSV_FILE}")
 
+import os
+import json
+from tqdm import tqdm
+
 def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2, sys_prompt2, num_ctx):
     df["json_answer2"] = None
     df["access control level predicted"] = "invalid"
+    df["res2"] = None  # New column to store the raw response
 
     for index, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing rows"):
         full_method_name = row['method']
@@ -347,41 +430,46 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
 
         prompt = ""
         json_answer = {"access_control_level": "invalid"}
-        res = {"user_message": "invalid", "response": "invalid"}
+        res = {"user_message": "invalid", "response": "no top_similar found"}
 
         if top_similar:
             prompt = create_prompt2_string(
                 top_similar, df, method_name, get_java_code(row), row["sink_code"]
             )
-            res = run_second_prompt_Ollama(prompt, model_prompt2,True, sys_prompt2, num_ctx)
+            res = run_second_prompt_Ollama(prompt, model_prompt2, True, sys_prompt2, num_ctx)
+        else:
+            res["response"] = "no top_similar found"
+
+        # Store the raw response in df["res2"]
+        df.at[index, 'res2'] = res["response"]
 
         access_control = "invalid"
+        json_str = "no top_similar found"
+
         try:
             json_answer = extract_json_from_string(res["response"])
             access_control = json_answer.get("access_control_level", "invalid")
-            # check if access_control is string, if not, convert it to string
             if not isinstance(access_control, str):
                 access_control = str(access_control)
             json_str = json.dumps(json_answer) if json_answer else "{}"
         except Exception as e:
             print(f"Error extracting JSON from response: {e}")
             print(f"Method: {method_name}, Service: {service_name}")
+            json_str = "error extracting json"
 
         df.at[index, 'json_answer2'] = json_str
         df.at[index, 'access control level predicted'] = access_control
 
         print(f"Method: {method_name}, Service: {service_name}, Access Control: {access_control}")
-        
-        
-        # todo: uncomment later
-        # Define folder path and create directories 
-        # folder_path = os.path.join(output_folder_preprocess, service_name, method_name)
-        # os.makedirs(folder_path, exist_ok=True)
 
-        # with open(os.path.join(folder_path, 'user_message2.txt'), 'w') as f:
-        #     f.write(res["user_message"])
-        # with open(os.path.join(folder_path, 'response2.txt'), 'w') as f:
-        #     f.write(res["response"])
+        # Define folder path and create directories 
+        folder_path = os.path.join(output_folder_preprocess, service_name, method_name)
+        os.makedirs(folder_path, exist_ok=True)
+
+        with open(os.path.join(folder_path, 'user_message2.txt'), 'w') as f:
+            f.write(res["user_message"])
+        with open(os.path.join(folder_path, 'response2.txt'), 'w') as f:
+            f.write(res["response"])
 
     # Save the updated DataFrame to a Parquet file
     df_to_save = df.drop(columns=['embeddings'], errors='ignore')
@@ -389,7 +477,8 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
     df_to_save.to_parquet(df_output_file)
     print(f"DataFrame serialized and saved to {df_output_file}")
 
-    return df  
+    return df
+
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze Java execution paths for security sinks')
@@ -401,10 +490,19 @@ def main():
     args = parser.parse_args()
     with open(args.prompt, 'r') as file:
         sys_prompt2 = file.read()
+    
+    modelfile=f'''
+    FROM llama3.3
+    system """
+    {sys_prompt2.strip()}
+    """
+    '''
     model_prompt2 = "myexample2"
-    ollama.create(model=model_prompt2,
-    from_=args.model,
-    system=sys_prompt2.strip())
+    
+    ollama.create(model=model_prompt2, modelfile=modelfile)
+    # ollama.create(model=model_prompt2,
+    # from_=args.model,
+    # system=sys_prompt2.strip())
     
     file_path = os.path.join(args.input_dir, "android_services_methods.parquet")  
     

@@ -1,0 +1,483 @@
+This is path 1 for the API with depth 2:
+depth : 0
+public void systemReady(){
+	Object v1 = new Object(3);
+	int v2 = ILockSettings$Stub.getCallingUid();
+	Integer v3 = Integer.valueOf(v2);
+	int v4 = EventLog.writeEvent(1397638484, v1);
+	p0.checkWritePermission(0);
+	PackageManager v6 = this.mContext.getPackageManager();
+	boolean v7 = v6.hasSystemFeature("android.software.secure_lock_screen");
+	this.mHasSecureLockScreen = v7;
+	p0.migrateOldData();
+	IGateKeeperService v9 = p0.getGateKeeperService();
+	this.mSpManager.initWeaverService();
+	p0.getAuthSecretHal();
+	this.mDeviceProvisionedObserver.onSystemReady();
+	this.mStorage.prefetchUser(0);
+	FingerprintManager v14 = this.mInjector.getFingerprintManager();
+	FaceManager v15 = this.mInjector.getFaceManager();
+	this.mBiometricDeferredQueue.systemReady(v14, v15);
+	return;
+}
+-----
+depth : 1
+public void checkWritePermission(int p1){
+	return;
+}
+-----
+depth : 1
+public IGateKeeperService getGateKeeperService(){
+	IBinder v1 = ServiceManager.getService("android.service.gatekeeper.IGateKeeperService");
+	LockSettingsService$GateKeeperDiedRecipient v1 = new LockSettingsService$GateKeeperDiedRecipient(p0,0);
+	v1.linkToDeath(v1, 0);
+	int v4 = Slog.w("LockSettingsService", " Unable to register death recipient", caughtException);
+	IGateKeeperService v5 = IGateKeeperService$Stub.asInterface(v1);
+	this.mGateKeeperService = v5;
+	return v5;
+}
+-----
+depth : 2
+public IGateKeeperService asInterface(IBinder p1){
+	IInterface v1 = p1.queryLocalInterface("android.service.gatekeeper.IGateKeeperService");
+	IGateKeeperService$Stub$Proxy v1 = new IGateKeeperService$Stub$Proxy(p1);
+	return v1;
+}
+-----
+depth : 1
+public void initWeaverService(){
+	this.mWeaverConfig = 0;
+	IWeaver v1 = p0.getWeaverService();
+	this.mWeaver = v1;
+	SyntheticPasswordManager$$ExternalSyntheticLambda0 v1 = new SyntheticPasswordManager$$ExternalSyntheticLambda0(p0);
+	v1.getConfig(v1);
+	Set v4 = p0.getUsedWeaverSlots();
+	this.mPasswordSlotManager.refreshActiveSlots(v4);
+	return;
+}
+-----
+depth : 2
+public IWeaver getWeaverService(){
+	IWeaver v1 = IWeaver.getService(1);
+	int v2 = Slog.i("SyntheticPasswordManager", "Device does not support weaver");
+	return 0;
+}
+-----
+depth : 2
+public Set getUsedWeaverSlots(){
+	Map v1 = this.mStorage.listSyntheticPasswordHandlesForAllUsers("weaver");
+	HashSet v1 = new HashSet();
+	Set v3 = v1.entrySet();
+	Iterator v4 = v3.iterator();
+	boolean v5 = v4.hasNext();
+	return v1;
+}
+-----
+depth : 2
+public void refreshActiveSlots(Set p1){
+	HashSet v0 = new HashSet();
+	Set v2 = this.mSlotMap.entrySet();
+	Iterator v3 = v2.iterator();
+	boolean v4 = v3.hasNext();
+	Iterator v5 = v0.iterator();
+	boolean v6 = v5.hasNext();
+	Iterator v7 = p1.iterator();
+	boolean v8 = v7.hasNext();
+	p0.saveSlotMap();
+	return;
+}
+-----
+depth : 1
+public void onSystemReady(){
+	Context v1 = LockSettingsService.-$$Nest$fgetmContext(this.this$0);
+	boolean v2 = LockPatternUtils.frpCredentialEnabled(v1);
+	boolean v3 = p0.isProvisioned();
+	int v4 = Slog.i("LockSettingsService", "FRP credential disabled, reporting device setup complete to Gatekeeper immediately");
+	p0.reportDeviceSetupComplete();
+	return;
+}
+-----
+depth : 2
+public Context -$$Nest$fgetmContext(LockSettingsService p1){
+	return this.mContext;
+}
+-----
+depth : 2
+public boolean isProvisioned(){
+	Context v1 = LockSettingsService.-$$Nest$fgetmContext(this.this$0);
+	ContentResolver v2 = v1.getContentResolver();
+	int v3 = Settings$Global.getInt(v2, "device_provisioned", 0);
+	return phiInstruction;
+}
+-----
+depth : 2
+public void reportDeviceSetupComplete(){
+	IGateKeeperService v1 = this.this$0.getGateKeeperService();
+	v1.reportDeviceSetupComplete();
+	int v3 = Slog.e("LockSettingsService", "Failure reporting to IGateKeeperService", caughtException);
+	return;
+}
+-----
+depth : 1
+public void prefetchUser(int p1){
+	boolean v1 = this.mCache.isFetched(p1);
+	this.mCache.setFetched(p1);
+	int v3 = LockSettingsStorage$Cache.-$$Nest$mgetVersion(this.mCache);
+	SQLiteDatabase v4 = this.mOpenHelper.getReadableDatabase();
+	String v4 = new String(1);
+	String v5 = Integer.toString(p1);
+	Cursor v6 = v4.query("locksettings", this.COLUMNS_FOR_PREFETCH, "user=?", v4, 0, 0, 0);
+	boolean v7 = v6.moveToNext();
+	v6.close();
+	LockSettingsStorage$CredentialHash v9 = p0.readCredentialHash(p1);
+	return;
+}
+-----
+depth : 2
+public boolean isFetched(int p1){
+	boolean v1 = p0.contains(2, "", p1);
+	return v1;
+}
+-----
+depth : 2
+public void setFetched(int p1){
+	p0.put(2, "isFetched", "true", p1);
+	return;
+}
+-----
+depth : 2
+public int -$$Nest$mgetVersion(LockSettingsStorage$Cache p1){
+	int v1 = p1.getVersion();
+	return v1;
+}
+-----
+depth : 2
+public LockSettingsStorage$CredentialHash readCredentialHash(int p1){
+	LockSettingsStorage$CredentialHash v1 = p0.readPasswordHashIfExists(p1);
+	LockSettingsStorage$CredentialHash v2 = p0.readPatternHashIfExists(p1);
+	LockSettingsStorage$CredentialHash v3 = LockSettingsStorage$CredentialHash.createEmptyHash();
+	return v3;
+}
+-----
+
+This is path 2 for the API with depth 2:
+depth : 0
+public void systemReady(){
+	Object v1 = new Object(3);
+	int v2 = ILockSettings$Stub.getCallingUid();
+	Integer v3 = Integer.valueOf(v2);
+	int v4 = EventLog.writeEvent(1397638484, v1);
+	p0.checkWritePermission(0);
+	PackageManager v6 = this.mContext.getPackageManager();
+	boolean v7 = v6.hasSystemFeature("android.software.secure_lock_screen");
+	this.mHasSecureLockScreen = v7;
+	p0.migrateOldData();
+	IGateKeeperService v9 = p0.getGateKeeperService();
+	this.mSpManager.initWeaverService();
+	p0.getAuthSecretHal();
+	this.mDeviceProvisionedObserver.onSystemReady();
+	this.mStorage.prefetchUser(0);
+	FingerprintManager v14 = this.mInjector.getFingerprintManager();
+	FaceManager v15 = this.mInjector.getFaceManager();
+	this.mBiometricDeferredQueue.systemReady(v14, v15);
+	return;
+}
+-----
+depth : 1
+public void checkWritePermission(int p1){
+	return;
+}
+-----
+depth : 1
+public IGateKeeperService getGateKeeperService(){
+	IBinder v1 = ServiceManager.getService("android.service.gatekeeper.IGateKeeperService");
+	LockSettingsService$GateKeeperDiedRecipient v1 = new LockSettingsService$GateKeeperDiedRecipient(p0,0);
+	v1.linkToDeath(v1, 0);
+	int v4 = Slog.w("LockSettingsService", " Unable to register death recipient", caughtException);
+	IGateKeeperService v5 = IGateKeeperService$Stub.asInterface(v1);
+	this.mGateKeeperService = v5;
+	return v5;
+}
+-----
+depth : 2
+public IGateKeeperService asInterface(IBinder p1){
+	IInterface v1 = p1.queryLocalInterface("android.service.gatekeeper.IGateKeeperService");
+	return v1;
+}
+-----
+depth : 1
+public void initWeaverService(){
+	this.mWeaverConfig = 0;
+	IWeaver v1 = p0.getWeaverService();
+	this.mWeaver = v1;
+	SyntheticPasswordManager$$ExternalSyntheticLambda0 v1 = new SyntheticPasswordManager$$ExternalSyntheticLambda0(p0);
+	v1.getConfig(v1);
+	Set v4 = p0.getUsedWeaverSlots();
+	this.mPasswordSlotManager.refreshActiveSlots(v4);
+	return;
+}
+-----
+depth : 2
+public IWeaver getWeaverService(){
+	IWeaver v1 = IWeaver.getService(1);
+	int v2 = Slog.i("SyntheticPasswordManager", "Device does not support weaver");
+	return 0;
+}
+-----
+depth : 2
+public Set getUsedWeaverSlots(){
+	Map v1 = this.mStorage.listSyntheticPasswordHandlesForAllUsers("weaver");
+	HashSet v1 = new HashSet();
+	Set v3 = v1.entrySet();
+	Iterator v4 = v3.iterator();
+	boolean v5 = v4.hasNext();
+	return v1;
+}
+-----
+depth : 2
+public void refreshActiveSlots(Set p1){
+	HashSet v0 = new HashSet();
+	Set v2 = this.mSlotMap.entrySet();
+	Iterator v3 = v2.iterator();
+	boolean v4 = v3.hasNext();
+	Iterator v5 = v0.iterator();
+	boolean v6 = v5.hasNext();
+	Iterator v7 = p1.iterator();
+	boolean v8 = v7.hasNext();
+	p0.saveSlotMap();
+	return;
+}
+-----
+depth : 1
+public void onSystemReady(){
+	Context v1 = LockSettingsService.-$$Nest$fgetmContext(this.this$0);
+	boolean v2 = LockPatternUtils.frpCredentialEnabled(v1);
+	boolean v3 = p0.isProvisioned();
+	int v4 = Slog.i("LockSettingsService", "FRP credential disabled, reporting device setup complete to Gatekeeper immediately");
+	p0.reportDeviceSetupComplete();
+	return;
+}
+-----
+depth : 2
+public Context -$$Nest$fgetmContext(LockSettingsService p1){
+	return this.mContext;
+}
+-----
+depth : 2
+public boolean isProvisioned(){
+	Context v1 = LockSettingsService.-$$Nest$fgetmContext(this.this$0);
+	ContentResolver v2 = v1.getContentResolver();
+	int v3 = Settings$Global.getInt(v2, "device_provisioned", 0);
+	return phiInstruction;
+}
+-----
+depth : 2
+public void reportDeviceSetupComplete(){
+	IGateKeeperService v1 = this.this$0.getGateKeeperService();
+	v1.reportDeviceSetupComplete();
+	int v3 = Slog.e("LockSettingsService", "Failure reporting to IGateKeeperService", caughtException);
+	return;
+}
+-----
+depth : 1
+public void prefetchUser(int p1){
+	boolean v1 = this.mCache.isFetched(p1);
+	this.mCache.setFetched(p1);
+	int v3 = LockSettingsStorage$Cache.-$$Nest$mgetVersion(this.mCache);
+	SQLiteDatabase v4 = this.mOpenHelper.getReadableDatabase();
+	String v4 = new String(1);
+	String v5 = Integer.toString(p1);
+	Cursor v6 = v4.query("locksettings", this.COLUMNS_FOR_PREFETCH, "user=?", v4, 0, 0, 0);
+	boolean v7 = v6.moveToNext();
+	v6.close();
+	LockSettingsStorage$CredentialHash v9 = p0.readCredentialHash(p1);
+	return;
+}
+-----
+depth : 2
+public boolean isFetched(int p1){
+	boolean v1 = p0.contains(2, "", p1);
+	return v1;
+}
+-----
+depth : 2
+public void setFetched(int p1){
+	p0.put(2, "isFetched", "true", p1);
+	return;
+}
+-----
+depth : 2
+public int -$$Nest$mgetVersion(LockSettingsStorage$Cache p1){
+	int v1 = p1.getVersion();
+	return v1;
+}
+-----
+depth : 2
+public LockSettingsStorage$CredentialHash readCredentialHash(int p1){
+	LockSettingsStorage$CredentialHash v1 = p0.readPasswordHashIfExists(p1);
+	LockSettingsStorage$CredentialHash v2 = p0.readPatternHashIfExists(p1);
+	LockSettingsStorage$CredentialHash v3 = LockSettingsStorage$CredentialHash.createEmptyHash();
+	return v3;
+}
+-----
+
+This is path 3 for the API with depth 2:
+depth : 0
+public void systemReady(){
+	Object v1 = new Object(3);
+	int v2 = ILockSettings$Stub.getCallingUid();
+	Integer v3 = Integer.valueOf(v2);
+	int v4 = EventLog.writeEvent(1397638484, v1);
+	p0.checkWritePermission(0);
+	PackageManager v6 = this.mContext.getPackageManager();
+	boolean v7 = v6.hasSystemFeature("android.software.secure_lock_screen");
+	this.mHasSecureLockScreen = v7;
+	p0.migrateOldData();
+	IGateKeeperService v9 = p0.getGateKeeperService();
+	this.mSpManager.initWeaverService();
+	p0.getAuthSecretHal();
+	this.mDeviceProvisionedObserver.onSystemReady();
+	this.mStorage.prefetchUser(0);
+	FingerprintManager v14 = this.mInjector.getFingerprintManager();
+	FaceManager v15 = this.mInjector.getFaceManager();
+	this.mBiometricDeferredQueue.systemReady(v14, v15);
+	return;
+}
+-----
+depth : 1
+public void checkWritePermission(int p1){
+	return;
+}
+-----
+depth : 1
+public IGateKeeperService getGateKeeperService(){
+	IBinder v1 = ServiceManager.getService("android.service.gatekeeper.IGateKeeperService");
+	LockSettingsService$GateKeeperDiedRecipient v1 = new LockSettingsService$GateKeeperDiedRecipient(p0,0);
+	v1.linkToDeath(v1, 0);
+	int v4 = Slog.w("LockSettingsService", " Unable to register death recipient", caughtException);
+	IGateKeeperService v5 = IGateKeeperService$Stub.asInterface(v1);
+	this.mGateKeeperService = v5;
+	return v5;
+}
+-----
+depth : 2
+public IGateKeeperService asInterface(IBinder p1){
+	IInterface v1 = p1.queryLocalInterface("android.service.gatekeeper.IGateKeeperService");
+	IGateKeeperService$Stub$Proxy v1 = new IGateKeeperService$Stub$Proxy(p1);
+	return v1;
+}
+-----
+depth : 1
+public void initWeaverService(){
+	this.mWeaverConfig = 0;
+	IWeaver v1 = p0.getWeaverService();
+	this.mWeaver = v1;
+	SyntheticPasswordManager$$ExternalSyntheticLambda0 v1 = new SyntheticPasswordManager$$ExternalSyntheticLambda0(p0);
+	v1.getConfig(v1);
+	Set v4 = p0.getUsedWeaverSlots();
+	this.mPasswordSlotManager.refreshActiveSlots(v4);
+	return;
+}
+-----
+depth : 2
+public IWeaver getWeaverService(){
+	IWeaver v1 = IWeaver.getService(1);
+	return v1;
+}
+-----
+depth : 2
+public Set getUsedWeaverSlots(){
+	Map v1 = this.mStorage.listSyntheticPasswordHandlesForAllUsers("weaver");
+	HashSet v1 = new HashSet();
+	Set v3 = v1.entrySet();
+	Iterator v4 = v3.iterator();
+	boolean v5 = v4.hasNext();
+	return v1;
+}
+-----
+depth : 2
+public void refreshActiveSlots(Set p1){
+	HashSet v0 = new HashSet();
+	Set v2 = this.mSlotMap.entrySet();
+	Iterator v3 = v2.iterator();
+	boolean v4 = v3.hasNext();
+	Iterator v5 = v0.iterator();
+	boolean v6 = v5.hasNext();
+	Iterator v7 = p1.iterator();
+	boolean v8 = v7.hasNext();
+	p0.saveSlotMap();
+	return;
+}
+-----
+depth : 1
+public void onSystemReady(){
+	Context v1 = LockSettingsService.-$$Nest$fgetmContext(this.this$0);
+	boolean v2 = LockPatternUtils.frpCredentialEnabled(v1);
+	boolean v3 = p0.isProvisioned();
+	int v4 = Slog.i("LockSettingsService", "FRP credential disabled, reporting device setup complete to Gatekeeper immediately");
+	p0.reportDeviceSetupComplete();
+	return;
+}
+-----
+depth : 2
+public Context -$$Nest$fgetmContext(LockSettingsService p1){
+	return this.mContext;
+}
+-----
+depth : 2
+public boolean isProvisioned(){
+	Context v1 = LockSettingsService.-$$Nest$fgetmContext(this.this$0);
+	ContentResolver v2 = v1.getContentResolver();
+	int v3 = Settings$Global.getInt(v2, "device_provisioned", 0);
+	return phiInstruction;
+}
+-----
+depth : 2
+public void reportDeviceSetupComplete(){
+	IGateKeeperService v1 = this.this$0.getGateKeeperService();
+	v1.reportDeviceSetupComplete();
+	int v3 = Slog.e("LockSettingsService", "Failure reporting to IGateKeeperService", caughtException);
+	return;
+}
+-----
+depth : 1
+public void prefetchUser(int p1){
+	boolean v1 = this.mCache.isFetched(p1);
+	this.mCache.setFetched(p1);
+	int v3 = LockSettingsStorage$Cache.-$$Nest$mgetVersion(this.mCache);
+	SQLiteDatabase v4 = this.mOpenHelper.getReadableDatabase();
+	String v4 = new String(1);
+	String v5 = Integer.toString(p1);
+	Cursor v6 = v4.query("locksettings", this.COLUMNS_FOR_PREFETCH, "user=?", v4, 0, 0, 0);
+	boolean v7 = v6.moveToNext();
+	v6.close();
+	LockSettingsStorage$CredentialHash v9 = p0.readCredentialHash(p1);
+	return;
+}
+-----
+depth : 2
+public boolean isFetched(int p1){
+	boolean v1 = p0.contains(2, "", p1);
+	return v1;
+}
+-----
+depth : 2
+public void setFetched(int p1){
+	p0.put(2, "isFetched", "true", p1);
+	return;
+}
+-----
+depth : 2
+public int -$$Nest$mgetVersion(LockSettingsStorage$Cache p1){
+	int v1 = p1.getVersion();
+	return v1;
+}
+-----
+depth : 2
+public LockSettingsStorage$CredentialHash readCredentialHash(int p1){
+	LockSettingsStorage$CredentialHash v1 = p0.readPasswordHashIfExists(p1);
+	LockSettingsStorage$CredentialHash v2 = p0.readPatternHashIfExists(p1);
+	LockSettingsStorage$CredentialHash v3 = LockSettingsStorage$CredentialHash.createEmptyHash();
+	return v3;
+}
+-----

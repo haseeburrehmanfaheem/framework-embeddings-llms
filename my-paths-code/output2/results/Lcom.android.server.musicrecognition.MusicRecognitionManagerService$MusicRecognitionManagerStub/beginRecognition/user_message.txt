@@ -1,0 +1,424 @@
+This is path 1 for the API with depth 2:
+depth : 0
+public void beginRecognition(RecognitionRequest p1, IBinder p2){
+	MusicRecognitionManagerService.-$$Nest$menforceCaller(this.this$0, "beginRecognition");
+	Object v2 = MusicRecognitionManagerService.access$000(this.this$0);
+	int v3 = UserHandle.getCallingUserId();
+	AbstractPerUserSystemService v4 = MusicRecognitionManagerService.access$100(this.this$0, v3);
+	boolean v5 = p0.isDefaultServiceLocked(v3);
+	boolean v6 = p0.isCalledByServiceAppLocked("beginRecognition");
+	v4.beginRecognitionLocked(p1, p2);
+	return;
+}
+-----
+depth : 1
+public void -$$Nest$menforceCaller(MusicRecognitionManagerService p1, String p2){
+	p1.enforceCaller(p2);
+	return;
+}
+-----
+depth : 2
+public void enforceCaller(String p1){
+	return;
+}
+-----
+depth : 1
+public boolean isDefaultServiceLocked(int p1){
+	ServiceNameResolver v1 = MusicRecognitionManagerService.access$200(this.this$0);
+	String v2 = v1.getDefaultServiceName(p1);
+	ServiceNameResolver v3 = MusicRecognitionManagerService.access$300(this.this$0);
+	String v4 = v3.getServiceName(p1);
+	boolean v5 = v2.equals(v4);
+	return v5;
+}
+-----
+depth : 2
+public ServiceNameResolver access$200(MusicRecognitionManagerService p1){
+	return AbstractMasterSystemService.mServiceNameResolver;
+}
+-----
+depth : 2
+public ServiceNameResolver access$300(MusicRecognitionManagerService p1){
+	return AbstractMasterSystemService.mServiceNameResolver;
+}
+-----
+depth : 1
+public boolean isCalledByServiceAppLocked(String p1){
+	int v1 = UserHandle.getCallingUserId();
+	int v2 = Binder.getCallingUid();
+	ServiceNameResolver v3 = MusicRecognitionManagerService.access$400(this.this$0);
+	String v4 = v3.getServiceName(v1);
+	ComponentName v5 = ComponentName.unflattenFromString(v4);
+	String v6 = v5.getPackageName();
+	Context v7 = this.this$0.getContext();
+	PackageManager v8 = v7.getPackageManager();
+	int v9 = UserHandle.getCallingUserId();
+	int v10 = v8.getPackageUidAsUser(v6, v9);
+	String v11 = MusicRecognitionManagerService.-$$Nest$sfgetTAG();
+	StringBuilder v11 = new StringBuilder();
+	StringBuilder v13 = v11.append(p1);
+	StringBuilder v14 = v11.append(": could not verify UID for ");
+	StringBuilder v15 = v11.append(v4);
+	String v16 = v11.toString();
+	int v17 = Slog.w(v11, v16);
+	return 0;
+}
+-----
+depth : 2
+public ServiceNameResolver access$400(MusicRecognitionManagerService p1){
+	return AbstractMasterSystemService.mServiceNameResolver;
+}
+-----
+depth : 2
+public String -$$Nest$sfgetTAG(){
+	return this.TAG;
+}
+-----
+depth : 1
+public void beginRecognitionLocked(RecognitionRequest p1, IBinder p2){
+	IMusicRecognitionManagerCallback v1 = IMusicRecognitionManagerCallback$Stub.asInterface(p2);
+	RemoteMusicRecognitionService v2 = p0.ensureRemoteServiceLocked(v1);
+	this.mRemoteService = v2;
+	Pair v3 = MusicRecognitionManagerPerUserService.createPipe();
+	MusicRecognitionManagerPerUserService$$ExternalSyntheticLambda0 v3 = new MusicRecognitionManagerPerUserService$$ExternalSyntheticLambda0(p0,p1,v1,Pair.second);
+	CompletableFuture v5 = this.mAttributionTagFuture.thenAcceptAsync(v3, MusicRecognitionManagerService.mExecutorService);
+	AudioFormat v6 = p1.getAudioFormat();
+	this.mRemoteService.onAudioStreamStarted(Pair.first, v6);
+	return;
+}
+-----
+depth : 2
+public IMusicRecognitionManagerCallback asInterface(IBinder p1){
+	IInterface v1 = p1.queryLocalInterface("android.media.musicrecognition.IMusicRecognitionManagerCallback");
+	IMusicRecognitionManagerCallback$Stub$Proxy v1 = new IMusicRecognitionManagerCallback$Stub$Proxy(p1);
+	return v1;
+}
+-----
+depth : 2
+public RemoteMusicRecognitionService ensureRemoteServiceLocked(IMusicRecognitionManagerCallback p1){
+	String v1 = p0.getComponentNameLocked();
+	ComponentName v2 = ComponentName.unflattenFromString(v1);
+	RemoteMusicRecognitionService v2 = new RemoteMusicRecognitionService(v3,v2,AbstractPerUserSystemService.mUserId,p0,v3,v5,AbstractMasterSystemService.verbose);
+	Context v3 = p0.getContext();
+	MusicRecognitionManagerPerUserService$MusicRecognitionServiceCallback v3 = new MusicRecognitionManagerPerUserService$MusicRecognitionServiceCallback(p0,p1,0);
+	boolean v5 = AbstractPerUserSystemService.mMaster.isBindInstantServiceAllowed();
+	this.mRemoteService = v2;
+	Context v7 = p0.getContext();
+	PackageManager v8 = v7.getPackageManager();
+	ComponentName v9 = this.mRemoteService.getComponentName();
+	ServiceInfo v10 = v8.getServiceInfo(v9, 128);
+	this.mServiceInfo = v10;
+	CompletableFuture v11 = this.mRemoteService.getAttributionTag();
+	this.mAttributionTagFuture = v11;
+	StringBuilder v11 = new StringBuilder();
+	StringBuilder v13 = v11.append("Remote service bound: ");
+	ComponentName v14 = this.mRemoteService.getComponentName();
+	StringBuilder v15 = v11.append(v14);
+	String v16 = v11.toString();
+	int v17 = Slog.i(this.TAG, v16);
+	int v18 = Slog.e(this.TAG, "Service was not found.", caughtException);
+	return this.mRemoteService;
+}
+-----
+depth : 2
+public Pair createPipe(){
+	ParcelFileDescriptor v1 = ParcelFileDescriptor.createPipe();
+	FileDescriptor v2 = v1[0].getFileDescriptor();
+	boolean v3 = v2.valid();
+	FileDescriptor v4 = v1[1].getFileDescriptor();
+	boolean v5 = v4.valid();
+	int v6 = Slog.e(this.TAG, "Failed to create audio stream pipe, didn't receive a pair of valid file descriptors.");
+	return 0;
+}
+-----
+depth : 2
+public AudioFormat getAudioFormat(){
+	return this.mAudioFormat;
+}
+-----
+depth : 2
+public void onAudioStreamStarted(ParcelFileDescriptor p1, AudioFormat p2){
+	RemoteMusicRecognitionService$$ExternalSyntheticLambda0 v0 = new RemoteMusicRecognitionService$$ExternalSyntheticLambda0(p0,p1,p2);
+	p0.scheduleAsyncRequest(v0);
+	return;
+}
+-----
+
+This is path 2 for the API with depth 2:
+depth : 0
+public void beginRecognition(RecognitionRequest p1, IBinder p2){
+	MusicRecognitionManagerService.-$$Nest$menforceCaller(this.this$0, "beginRecognition");
+	Object v2 = MusicRecognitionManagerService.access$000(this.this$0);
+	int v3 = UserHandle.getCallingUserId();
+	AbstractPerUserSystemService v4 = MusicRecognitionManagerService.access$100(this.this$0, v3);
+	boolean v5 = p0.isDefaultServiceLocked(v3);
+	boolean v6 = p0.isCalledByServiceAppLocked("beginRecognition");
+	v4.beginRecognitionLocked(p1, p2);
+	return;
+}
+-----
+depth : 1
+public void -$$Nest$menforceCaller(MusicRecognitionManagerService p1, String p2){
+	p1.enforceCaller(p2);
+	return;
+}
+-----
+depth : 2
+public void enforceCaller(String p1){
+	return;
+}
+-----
+depth : 1
+public boolean isDefaultServiceLocked(int p1){
+	ServiceNameResolver v1 = MusicRecognitionManagerService.access$200(this.this$0);
+	String v2 = v1.getDefaultServiceName(p1);
+	ServiceNameResolver v3 = MusicRecognitionManagerService.access$300(this.this$0);
+	String v4 = v3.getServiceName(p1);
+	boolean v5 = v2.equals(v4);
+	return v5;
+}
+-----
+depth : 2
+public ServiceNameResolver access$200(MusicRecognitionManagerService p1){
+	return AbstractMasterSystemService.mServiceNameResolver;
+}
+-----
+depth : 2
+public ServiceNameResolver access$300(MusicRecognitionManagerService p1){
+	return AbstractMasterSystemService.mServiceNameResolver;
+}
+-----
+depth : 1
+public boolean isCalledByServiceAppLocked(String p1){
+	String v11 = MusicRecognitionManagerService.-$$Nest$sfgetTAG();
+	StringBuilder v11 = new StringBuilder();
+	StringBuilder v13 = v11.append(p1);
+	StringBuilder v14 = v11.append(": called by UID ");
+	StringBuilder v15 = v11.append(v2);
+	StringBuilder v16 = v11.append(", but service UID is ");
+	StringBuilder v17 = v11.append(v10);
+	String v18 = v11.toString();
+	int v19 = Slog.e(v11, v18);
+	return 0;
+}
+-----
+depth : 2
+public String -$$Nest$sfgetTAG(){
+	return this.TAG;
+}
+-----
+depth : 1
+public void beginRecognitionLocked(RecognitionRequest p1, IBinder p2){
+	IMusicRecognitionManagerCallback v1 = IMusicRecognitionManagerCallback$Stub.asInterface(p2);
+	RemoteMusicRecognitionService v2 = p0.ensureRemoteServiceLocked(v1);
+	this.mRemoteService = v2;
+	Pair v3 = MusicRecognitionManagerPerUserService.createPipe();
+	MusicRecognitionManagerPerUserService$$ExternalSyntheticLambda0 v3 = new MusicRecognitionManagerPerUserService$$ExternalSyntheticLambda0(p0,p1,v1,Pair.second);
+	CompletableFuture v5 = this.mAttributionTagFuture.thenAcceptAsync(v3, MusicRecognitionManagerService.mExecutorService);
+	AudioFormat v6 = p1.getAudioFormat();
+	this.mRemoteService.onAudioStreamStarted(Pair.first, v6);
+	return;
+}
+-----
+depth : 2
+public IMusicRecognitionManagerCallback asInterface(IBinder p1){
+	IInterface v1 = p1.queryLocalInterface("android.media.musicrecognition.IMusicRecognitionManagerCallback");
+	IMusicRecognitionManagerCallback$Stub$Proxy v1 = new IMusicRecognitionManagerCallback$Stub$Proxy(p1);
+	return v1;
+}
+-----
+depth : 2
+public RemoteMusicRecognitionService ensureRemoteServiceLocked(IMusicRecognitionManagerCallback p1){
+	String v1 = p0.getComponentNameLocked();
+	ComponentName v2 = ComponentName.unflattenFromString(v1);
+	RemoteMusicRecognitionService v2 = new RemoteMusicRecognitionService(v3,v2,AbstractPerUserSystemService.mUserId,p0,v3,v5,AbstractMasterSystemService.verbose);
+	Context v3 = p0.getContext();
+	MusicRecognitionManagerPerUserService$MusicRecognitionServiceCallback v3 = new MusicRecognitionManagerPerUserService$MusicRecognitionServiceCallback(p0,p1,0);
+	boolean v5 = AbstractPerUserSystemService.mMaster.isBindInstantServiceAllowed();
+	this.mRemoteService = v2;
+	Context v7 = p0.getContext();
+	PackageManager v8 = v7.getPackageManager();
+	ComponentName v9 = this.mRemoteService.getComponentName();
+	ServiceInfo v10 = v8.getServiceInfo(v9, 128);
+	this.mServiceInfo = v10;
+	CompletableFuture v11 = this.mRemoteService.getAttributionTag();
+	this.mAttributionTagFuture = v11;
+	StringBuilder v11 = new StringBuilder();
+	StringBuilder v13 = v11.append("Remote service bound: ");
+	ComponentName v14 = this.mRemoteService.getComponentName();
+	StringBuilder v15 = v11.append(v14);
+	String v16 = v11.toString();
+	int v17 = Slog.i(this.TAG, v16);
+	int v18 = Slog.e(this.TAG, "Service was not found.", caughtException);
+	return this.mRemoteService;
+}
+-----
+depth : 2
+public Pair createPipe(){
+	ParcelFileDescriptor v1 = ParcelFileDescriptor.createPipe();
+	FileDescriptor v2 = v1[0].getFileDescriptor();
+	boolean v3 = v2.valid();
+	FileDescriptor v4 = v1[1].getFileDescriptor();
+	boolean v5 = v4.valid();
+	int v6 = Slog.e(this.TAG, "Failed to create audio stream pipe, didn't receive a pair of valid file descriptors.");
+	return 0;
+}
+-----
+depth : 2
+public AudioFormat getAudioFormat(){
+	return this.mAudioFormat;
+}
+-----
+depth : 2
+public void onAudioStreamStarted(ParcelFileDescriptor p1, AudioFormat p2){
+	RemoteMusicRecognitionService$$ExternalSyntheticLambda0 v0 = new RemoteMusicRecognitionService$$ExternalSyntheticLambda0(p0,p1,p2);
+	p0.scheduleAsyncRequest(v0);
+	return;
+}
+-----
+
+This is path 3 for the API with depth 2:
+depth : 0
+public void beginRecognition(RecognitionRequest p1, IBinder p2){
+	MusicRecognitionManagerService.-$$Nest$menforceCaller(this.this$0, "beginRecognition");
+	Object v2 = MusicRecognitionManagerService.access$000(this.this$0);
+	int v3 = UserHandle.getCallingUserId();
+	AbstractPerUserSystemService v4 = MusicRecognitionManagerService.access$100(this.this$0, v3);
+	boolean v5 = p0.isDefaultServiceLocked(v3);
+	boolean v6 = p0.isCalledByServiceAppLocked("beginRecognition");
+	v4.beginRecognitionLocked(p1, p2);
+	return;
+}
+-----
+depth : 1
+public void -$$Nest$menforceCaller(MusicRecognitionManagerService p1, String p2){
+	p1.enforceCaller(p2);
+	return;
+}
+-----
+depth : 2
+public void enforceCaller(String p1){
+	return;
+}
+-----
+depth : 1
+public boolean isDefaultServiceLocked(int p1){
+	ServiceNameResolver v1 = MusicRecognitionManagerService.access$200(this.this$0);
+	String v2 = v1.getDefaultServiceName(p1);
+	ServiceNameResolver v3 = MusicRecognitionManagerService.access$300(this.this$0);
+	String v4 = v3.getServiceName(p1);
+	boolean v5 = v2.equals(v4);
+	return v5;
+}
+-----
+depth : 2
+public ServiceNameResolver access$200(MusicRecognitionManagerService p1){
+	return AbstractMasterSystemService.mServiceNameResolver;
+}
+-----
+depth : 2
+public ServiceNameResolver access$300(MusicRecognitionManagerService p1){
+	return AbstractMasterSystemService.mServiceNameResolver;
+}
+-----
+depth : 1
+public boolean isCalledByServiceAppLocked(String p1){
+	int v1 = UserHandle.getCallingUserId();
+	int v2 = Binder.getCallingUid();
+	ServiceNameResolver v3 = MusicRecognitionManagerService.access$400(this.this$0);
+	String v4 = v3.getServiceName(v1);
+	ComponentName v5 = ComponentName.unflattenFromString(v4);
+	String v6 = v5.getPackageName();
+	Context v7 = this.this$0.getContext();
+	PackageManager v8 = v7.getPackageManager();
+	int v9 = UserHandle.getCallingUserId();
+	int v10 = v8.getPackageUidAsUser(v6, v9);
+	String v11 = MusicRecognitionManagerService.-$$Nest$sfgetTAG();
+	StringBuilder v11 = new StringBuilder();
+	StringBuilder v13 = v11.append(p1);
+	StringBuilder v14 = v11.append(": could not verify UID for ");
+	StringBuilder v15 = v11.append(v4);
+	String v16 = v11.toString();
+	int v17 = Slog.w(v11, v16);
+	return 0;
+}
+-----
+depth : 2
+public ServiceNameResolver access$400(MusicRecognitionManagerService p1){
+	return AbstractMasterSystemService.mServiceNameResolver;
+}
+-----
+depth : 2
+public String -$$Nest$sfgetTAG(){
+	return this.TAG;
+}
+-----
+depth : 1
+public void beginRecognitionLocked(RecognitionRequest p1, IBinder p2){
+	IMusicRecognitionManagerCallback v1 = IMusicRecognitionManagerCallback$Stub.asInterface(p2);
+	RemoteMusicRecognitionService v2 = p0.ensureRemoteServiceLocked(v1);
+	this.mRemoteService = v2;
+	Pair v3 = MusicRecognitionManagerPerUserService.createPipe();
+	MusicRecognitionManagerPerUserService$$ExternalSyntheticLambda0 v3 = new MusicRecognitionManagerPerUserService$$ExternalSyntheticLambda0(p0,p1,v1,Pair.second);
+	CompletableFuture v5 = this.mAttributionTagFuture.thenAcceptAsync(v3, MusicRecognitionManagerService.mExecutorService);
+	AudioFormat v6 = p1.getAudioFormat();
+	this.mRemoteService.onAudioStreamStarted(Pair.first, v6);
+	return;
+}
+-----
+depth : 2
+public IMusicRecognitionManagerCallback asInterface(IBinder p1){
+	IInterface v1 = p1.queryLocalInterface("android.media.musicrecognition.IMusicRecognitionManagerCallback");
+	IMusicRecognitionManagerCallback$Stub$Proxy v1 = new IMusicRecognitionManagerCallback$Stub$Proxy(p1);
+	return v1;
+}
+-----
+depth : 2
+public RemoteMusicRecognitionService ensureRemoteServiceLocked(IMusicRecognitionManagerCallback p1){
+	String v1 = p0.getComponentNameLocked();
+	ComponentName v2 = ComponentName.unflattenFromString(v1);
+	RemoteMusicRecognitionService v2 = new RemoteMusicRecognitionService(v3,v2,AbstractPerUserSystemService.mUserId,p0,v3,v5,AbstractMasterSystemService.verbose);
+	Context v3 = p0.getContext();
+	MusicRecognitionManagerPerUserService$MusicRecognitionServiceCallback v3 = new MusicRecognitionManagerPerUserService$MusicRecognitionServiceCallback(p0,p1,0);
+	boolean v5 = AbstractPerUserSystemService.mMaster.isBindInstantServiceAllowed();
+	this.mRemoteService = v2;
+	Context v7 = p0.getContext();
+	PackageManager v8 = v7.getPackageManager();
+	ComponentName v9 = this.mRemoteService.getComponentName();
+	ServiceInfo v10 = v8.getServiceInfo(v9, 128);
+	this.mServiceInfo = v10;
+	CompletableFuture v11 = this.mRemoteService.getAttributionTag();
+	this.mAttributionTagFuture = v11;
+	StringBuilder v11 = new StringBuilder();
+	StringBuilder v13 = v11.append("Remote service bound: ");
+	ComponentName v14 = this.mRemoteService.getComponentName();
+	StringBuilder v15 = v11.append(v14);
+	String v16 = v11.toString();
+	int v17 = Slog.i(this.TAG, v16);
+	int v18 = Slog.e(this.TAG, "Service was not found.", caughtException);
+	return this.mRemoteService;
+}
+-----
+depth : 2
+public Pair createPipe(){
+	ParcelFileDescriptor v1 = ParcelFileDescriptor.createPipe();
+	FileDescriptor v2 = v1[0].getFileDescriptor();
+	boolean v3 = v2.valid();
+	FileDescriptor v4 = v1[1].getFileDescriptor();
+	boolean v5 = v4.valid();
+	Pair v6 = Pair.create(v1[0], v1[1]);
+	return v6;
+}
+-----
+depth : 2
+public AudioFormat getAudioFormat(){
+	return this.mAudioFormat;
+}
+-----
+depth : 2
+public void onAudioStreamStarted(ParcelFileDescriptor p1, AudioFormat p2){
+	RemoteMusicRecognitionService$$ExternalSyntheticLambda0 v0 = new RemoteMusicRecognitionService$$ExternalSyntheticLambda0(p0,p1,p2);
+	p0.scheduleAsyncRequest(v0);
+	return;
+}
+-----
