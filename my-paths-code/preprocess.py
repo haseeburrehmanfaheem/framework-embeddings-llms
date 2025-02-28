@@ -222,7 +222,7 @@ def main():
     
     # if args.service_name:
     # df = df[df["service_name"] == "Lcom.android.server.pm.UserManagerService"]
-    df = df[:500]
+    # df = df[:500]
     print(f"length of df: {len(df)}")
     process_dataframe(
         df=df,
