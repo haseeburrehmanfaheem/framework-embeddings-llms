@@ -1,0 +1,52 @@
+To identify the sinks in the provided API `getRootTaskInfoOnDisplay`, we will analyze each path separately and then combine our findings into a JSON format. 
+
+### Path 1 Analysis
+In this path, several operations are performed that could potentially be considered as contributing to a sink:
+- The method `RootWindowContainer.getDisplayContent(p3)` is invoked with an input parameter `p3`, suggesting it follows the positive rule of taking input parameters.
+- A new instance of `ActivityTaskManager$RootTaskInfo` is created, and its fields are filled using data derived from the task's information. This creation uses data flow from API parameters (indirectly through `v7`) and thus could be considered a sink.
+- Various other objects like `[I`, `[Z`, `RootWindowContainer$$ExternalSyntheticLambda21`, etc., are created with potential links to input data or results of previous operations.
+
+However, not all these operations directly contribute to sensitive information being returned or accessed in a way that would clearly categorize them as sinks under the provided rules. The most relevant instructions seem to be those related to creating and filling `ActivityTaskManager$RootTaskInfo`, which is then returned by the API.
+
+### Path 2 Analysis
+This path involves:
+- Boosting thread priority using `this.sThreadPriorityBooster.boost()`.
+- Getting a root task with `RootWindowContainer.getRootTask(p1, p2, p3)`, which uses input parameters.
+- The potential creation and return of `ActivityTaskManager$RootTaskInfo` based on the root task.
+
+Again, the most sensitive operation in terms of data flow and access control seems to be related to retrieving and possibly returning a `RootTaskInfo`.
+
+### Path 3 Analysis
+This path is relatively straightforward:
+- It involves boosting priority for a locked section.
+- Retrieves `ActivityTaskManager$RootTaskInfo` directly using `this.mRootWindowContainer.getRootTaskInfo(p1, p2, p3)`, which takes input parameters and returns sensitive information.
+
+The key operation here is the retrieval of `RootTaskInfo`, which directly uses API parameters and returns potentially sensitive data.
+
+### Combining Findings
+Given the paths analyzed, the primary sinks appear to be related to retrieving or creating instances of `ActivityTaskManager$RootTaskInfo` and filling its fields with task-related information. These operations are sensitive as they handle access control for task information based on input parameters.
+
+Below is a JSON representation of the identified sinks, focusing on the most relevant instructions from each path that contribute to potential security concerns:
+
+```json
+{
+  "Sinks": [
+    [
+      "ActivityTaskManager$RootTaskInfo v11 = new ActivityTaskManager$RootTaskInfo();",
+      "v7.fillTaskInfo(v11);",
+      "return v6;"
+    ],
+    [
+      "Task v6 = RootWindowContainer.getRootTask(p1, p2, p3);",
+      "ActivityTaskManager$RootTaskInfo v7 = RootWindowContainer.getRootTaskInfo(v6);",
+      "return v5;"
+    ],
+    [
+      "ActivityTaskManager$RootTaskInfo v4 = this.mRootWindowContainer.getRootTaskInfo(p1, p2, p3);",
+      "return v4;"
+    ]
+  ]
+}
+```
+
+This JSON highlights the creation and return of `ActivityTaskManager$RootTaskInfo` instances across different paths as the primary sinks. These operations are ranked based on their direct involvement with sensitive data access and manipulation, considering both the use of input parameters and the potential impact on security.

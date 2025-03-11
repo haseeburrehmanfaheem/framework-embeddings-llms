@@ -65,12 +65,47 @@ def get_java_code(row):
     return '\n'.join([f"This is path {i+1} for the API with depth {max_depth}:\n{code['java_code']}"
                      for i, code in enumerate([d for d in row["depths"] if d['depth'] == max_depth])])
 
+def get_three_java_codes(row):
+    """Extract 3 Java code snippets: one from max depth, one from max-1, one from max-2.
+    
+    If there are not enough depths, take more from the highest available.
+    """
+    from collections import defaultdict
+
+    # Group by depth
+    depth_dict = defaultdict(list)
+    for entry in row["depths"]:
+        depth_dict[entry['depth']].append(entry)
+
+    # Sort available depths in descending order
+    sorted_depths = sorted(depth_dict.keys(), reverse=True)
+    
+    selected_entries = []
+    
+    # Try to get 1 code from max, max-1, and max-2 depths
+    for i in range(3):
+        if i < len(sorted_depths):  # Check if that depth exists
+            depth = sorted_depths[i]
+            selected_entries.append(depth_dict[depth].pop(0))  # Get one entry from this depth
+    
+    # If we still need more codes, fill from highest available
+    all_remaining_entries = sum(depth_dict.values(), [])  # Flatten remaining entries
+    while len(selected_entries) < 3 and all_remaining_entries:
+        selected_entries.append(all_remaining_entries.pop(0))
+
+    # Format output with depth information
+    return '\n\n'.join([
+        f"This is path {i+1} for the API with depth {entry['depth']}:\n{entry['java_code']}"
+        for i, entry in enumerate(selected_entries)
+    ])
+
+
 def run_ollama_prompt(method_code, model_name, sys_prompt, num_ctx):
     """Execute the analysis prompt with Ollama."""
     response = ollama.chat(
         model=model_name,
         messages=[{'role': 'user', 'content': method_code}],
-        options={'num_ctx': num_ctx}
+        options={'num_ctx': num_ctx, 'temperature': 0.3} # todo: change temperature
     )
     return {
         "system_message": sys_prompt,
@@ -163,14 +198,17 @@ def process_dataframe(df, output_folder, model_name, sys_prompt, num_ctx):
     """Process DataFrame and save results."""
     df['json_answer'] = None
     df['res1'] = None
+    df['prompt1'] = None
     
     for index, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing rows"):
         method_name = row['method'].split("(")[0]
         service_name = row['service_name']
-        code_string = get_java_code(row)
+        # code_string = get_java_code(row)
+        code_string_2 = get_three_java_codes(row)
 
         try:
-            res = run_ollama_prompt(code_string, model_name, sys_prompt, num_ctx)
+            df.at[index, 'prompt1'] = code_string_2
+            res = run_ollama_prompt(code_string_2, model_name, sys_prompt, num_ctx)
             df.at[index, 'res1'] = res['response']
             df.at[index, 'json_answer'] = extract_json_from_string(res["response"])
             # print(f"json_answer at this index is {df.at[index, 'json_answer']}")
@@ -209,7 +247,7 @@ def main():
     #           system=sys_prompt.strip())
     
     modelfile=f'''
-    FROM llama3.3
+    FROM {args.model.strip()}
     system """
     {sys_prompt.strip()}
     """

@@ -1,0 +1,212 @@
+This is path 1 for the API with depth 2:
+public boolean tryUnlockWithCachedUnifiedChallenge(int p1){
+	Object v2 = this.mEncryptedPasswords.get(p1);
+	if (v2 != 0) {
+		StringBuilder v4 = new StringBuilder();
+		StringBuilder v6 = v4.append("com.android.server.locksettings.unified_profile_cache_v2_");
+		StringBuilder v7 = v4.append(p1);
+		String v8 = v4.toString();
+		String v3 = v8;
+		Key v9 = this.mKeyStore.getKey(v3, 0);
+		if (v9 != 0) {
+			byte[] v10 = Arrays.copyOf(v2, 12);
+			byte[] v11 = Arrays.copyOfRange(v2, 12, v2.length);
+			Cipher v12 = Cipher.getInstance("AES/GCM/NoPadding");
+			GCMParameterSpec v13 = new GCMParameterSpec(128,v10);
+			LockscreenCredential v1 = 0;
+			if (v1 != 0) {
+				if (v1 == 0) {
+					LockscreenCredential.ensureNotZeroized();
+					if (this.mType != -1) {
+						boolean v17 = 1;
+						if (v17 != 0) {
+							if (p1 != -9999) {
+								ContentResolver v19 = this.mContext.getContentResolver();
+								int v21 = Settings$Global.getInt(v19, "device_provisioned", 0);
+								int v20 = v21;
+								if (v20 == 0) {
+									boolean v23 = this.mInjector.hasEnrolledBiometrics(p1);
+									if ((0 & 1) == 0) {
+										boolean v32 = LockSettingsService.isSyntheticPasswordBasedCredentialLocked(p1);
+										if (v32 != 0) {
+											if (p1 != -9999) {
+												long v33 = LockSettingsService.getSyntheticPasswordHandleLocked(p1);
+												IGateKeeperService v34 = LockSettingsService.getGateKeeperService();
+												SyntheticPasswordManager$AuthenticationResult v35 = this.mSpManager.unwrapPasswordBasedSyntheticPassword(v34, v33, v1, p1, 0);
+												int v36 = SyntheticPasswordManager$AuthenticationResult.gkResponse.getResponseCode();
+												if (v36 != 0) {
+													byte[] v37 = SyntheticPasswordManager$AuthenticationResult.authToken.deriveGkPassword();
+													this.mBiometricDeferredQueue.addPendingLockoutResetForUser(p1, v37);
+													IGateKeeperService v39 = LockSettingsService.getGateKeeperService();
+													VerifyCredentialResponse v40 = this.mSpManager.verifyChallenge(v39, SyntheticPasswordManager$AuthenticationResult.authToken, 0, p1);
+													int v41 = v40.getResponseCode();
+													if (v41 == 0) {
+														int v42 = SyntheticPasswordManager$AuthenticationResult.gkResponse.getResponseCode();
+														if (v42 != 0) {
+															int v43 = SyntheticPasswordManager$AuthenticationResult.gkResponse.getResponseCode();
+															if (v43 != 1) {
+																int v44 = SyntheticPasswordManager$AuthenticationResult.gkResponse.getTimeout();
+																if (v44 <= 0) {
+																	LockSettingsService.requireStrongAuth(8, p1);
+																	boolean v46 = SyntheticPasswordManager$AuthenticationResult.gkResponse.isMatched();
+																	if (v46 == 0) {
+																		if (1 == 0) {
+																			VerifyCredentialResponse v22 = SyntheticPasswordManager$AuthenticationResult.gkResponse;
+																			if (v22 == 0) {
+																				if (p1 != -9999) {
+																					LockSettingsStorage$CredentialHash v48 = LockSettingsStorage.readPasswordHashIfExists(p1);
+																					if (v48 == 0) {
+																						LockSettingsStorage$CredentialHash v49 = LockSettingsStorage.readPatternHashIfExists(p1);
+																						if (v49 == 0) {
+																							LockSettingsStorage$CredentialHash v50 = LockSettingsStorage$CredentialHash.createEmptyHash();
+																							LockSettingsStorage$CredentialHash v47 = v50;
+																							if (LockSettingsStorage$CredentialHash.type != 2) {
+																								int v52 = LockscreenCredential.getType();
+																								if (v52 == 4) {
+																									int v53 = LockscreenCredential.getType();
+																									if (v53 != 3) {
+																										boolean v51 = 1;
+																										if (v51 != 0) {
+																											if (v47 == 0) {
+																												if (LockSettingsStorage$CredentialHash.hash.length != 0) {
+																													boolean v55 = v1.isNone();
+																													if (v55 == 0) {
+																														if (v47 == 0) {
+																															if (LockSettingsStorage$CredentialHash.hash.length == 0) {
+																																boolean v56 = v1.isNone();
+																																if (v56 == 0) {
+																																	StrictMode.noteDiskRead();
+																																	IGateKeeperService v58 = LockSettingsService.getGateKeeperService();
+																																	byte[] v59 = v1.getCredential();
+																																	GateKeeperResponse v60 = v58.verifyChallenge(p1, 0, LockSettingsStorage$CredentialHash.hash, v59);
+																																	VerifyCredentialResponse v61 = LockSettingsService.convertResponse(v60);
+																																	boolean v62 = v60.getShouldReEnroll();
+																																	int v63 = v61.getResponseCode();
+																																	if (v63 != 0) {
+																																		if (0 == 0) {
+																																			0.onCredentialVerified();
+																																			LockSettingsService.setUserPasswordMetrics(v1, p1);
+																																			byte[] v66 = v1.getCredential();
+																																			LockSettingsService.unlockKeystore(v66, p1);
+																																			byte[] v74 = LockSettingsService.secretFromCredential(v1);
+																																			LockSettingsService.unlockUser(p1, v74);
+																																			boolean v76 = LockSettingsService.isProfileWithSeparatedLock(p1);
+																																			if (v76 == 0) {
+																																				LockSettingsService.setDeviceUnlockedForUser(p1);
+																																				if (v62 == 0) {
+																																					boolean v78 = LockSettingsService.shouldMigrateToSyntheticPasswordLocked(p1);
+																																					if (v78 == 0) {
+																																						LockSettingsService.sendCredentialsOnUnlockIfRequired(v1, p1);
+																																						VerifyCredentialResponse v54 = v61;
+																																						int v80 = this.mResponseCode;
+																																						if (v80 != 0) {
+																																							Message v82 = this.mHandler.obtainMessage(5, p1, 0);
+																																							v82.sendToTarget();
+																																							VerifyCredentialResponse v16 = v54;
+																																							int v84 = v16.getResponseCode();
+																																							if (v84 != 0) {
+																																								if (this.mCredential == 0) {
+																																									Arrays.fill(this.mCredential, 0);
+																																									this.mCredential = 0;
+																																									return 0;
+																																								}
+																																							}
+																																						}
+																																					}
+																																				}
+																																			}
+																																		}
+																																	}
+																																}
+																															}
+																														}
+																													}
+																												}
+																											}
+																										}
+																									}
+																								}
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+This is path 2 for the API with depth 1:
+public boolean tryUnlockWithCachedUnifiedChallenge(int p1){
+	Object v2 = this.mEncryptedPasswords.get(p1);
+	if (v2 != 0) {
+		String v3 = ManagedProfilePasswordCache.getEncryptionKeyName(p1);
+		Key v4 = this.mKeyStore.getKey(v3, 0);
+		if (v4 != 0) {
+			byte[] v5 = Arrays.copyOf(v2, 12);
+			byte[] v6 = Arrays.copyOfRange(v2, 12, v2.length);
+			Cipher v7 = Cipher.getInstance("AES/GCM/NoPadding");
+			GCMParameterSpec v8 = new GCMParameterSpec(128,v5);
+			LockscreenCredential v1 = 0;
+			if (v1 != 0) {
+				if (v1 == 0) {
+					boolean v12 = v1.isNone();
+					if (v12 != 0) {
+						if (p1 != -9999) {
+							ContentResolver v13 = this.mContext.getContentResolver();
+							int v14 = this.mInjector.settingsGlobalGetInt(v13, "device_provisioned", 0);
+							if (v14 == 0) {
+								VerifyCredentialResponse v15 = LockSettingsService.spBasedDoVerifyCredential(v1, p1, 0, 0);
+								if (v15 == 0) {
+									if (p1 != -9999) {
+										LockSettingsStorage$CredentialHash v16 = this.mStorage.readCredentialHash(p1);
+										boolean v17 = v1.checkAgainstStoredType(LockSettingsStorage$CredentialHash.type);
+										if (v17 != 0) {
+											int v23 = v1.getType();
+											VerifyCredentialResponse v11 = VerifyCredentialResponse.ERROR;
+											int v27 = this.mResponseCode;
+											if (v27 != 0) {
+												LockscreenCredential.zeroize();
+												return 0;
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+This is path 3 for the API with depth 0:
+public boolean tryUnlockWithCachedUnifiedChallenge(int p1){
+	LockscreenCredential v1 = this.mManagedProfilePasswordCache.retrievePassword(p1);
+	if (v1 != 0) {
+		VerifyCredentialResponse v2 = p0.doVerifyCredential(v1, p1, 0, 0);
+		int v3 = v2.getResponseCode();
+		if (v3 != 0) {
+			v1.close();
+			return 0;
+		}
+	}
+}

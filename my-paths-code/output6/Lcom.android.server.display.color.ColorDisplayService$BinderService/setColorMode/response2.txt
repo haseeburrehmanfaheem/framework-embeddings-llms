@@ -1,0 +1,31 @@
+To determine the access control level for the `setColorMode` API, we need to analyze its behavior, the sink it interacts with, and compare it with similar APIs that have known access control levels.
+
+The `setColorMode` API:
+- Takes an integer parameter `p1` representing the color mode to be set.
+- Checks if the specified color mode is available using `ColorDisplayService.isColorModeAvailable(p2)`.
+- If the mode is not available, it sets the "display_color_mode" system setting for the current user using `Settings$System.putIntForUser`.
+
+The sink code indicates that the API interacts with system settings:
+```java
+boolean v9 = Settings$System.putIntForUser(v8, "display_color_mode", p2, this.mCurrentUser);
+```
+
+Similar APIs provided are:
+1. `setReduceBrightColorsStrength(I)Z` - Access Control Level: `SYS_OR_SIG`
+   - Interacts with secure settings: `Settings$Secure.putIntForUser`.
+2. `setReduceBrightColorsActivated(Z)Z` - Access Control Level: `SYS_OR_SIG`
+   - Also interacts with secure settings: `Settings$Secure.putIntForUser`.
+
+Both similar APIs have an access control level of `SYS_OR_SIG`, indicating they require either system or signature-level permission to execute, which is typically reserved for operations that can significantly impact the device's behavior or user experience.
+
+However, `setColorMode` interacts with system settings (`Settings$System`) rather than secure settings (`Settings$Secure`). System settings are generally less sensitive than secure settings but still represent a level of control over the device's configuration that should be restricted to appropriate parties (e.g., system apps or apps with specific permissions).
+
+Considering the nature of the operation (setting display color mode) and its interaction with system settings, it seems reasonable to classify `setColorMode` as requiring permission that is not as sensitive as secure settings but still significant enough to warrant protection against arbitrary access.
+
+Given these considerations, the most appropriate access control level for `setColorMode` would be `SYS_OR_SIG`, aligning with the similar APIs' access levels due to its impact on system settings and the need to restrict such changes to authorized entities (system or apps with the necessary signature-level permissions).
+
+```json
+{
+  "access_control_level": "SYS_OR_SIG"
+}
+```

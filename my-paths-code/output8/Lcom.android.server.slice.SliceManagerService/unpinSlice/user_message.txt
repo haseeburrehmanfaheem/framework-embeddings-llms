@@ -1,0 +1,97 @@
+This is path 1 for the API with depth 2:
+public void unpinSlice(String p1, Uri p2, IBinder p3){
+	int v5 = Binder.getCallingUid();
+	int v6 = Binder.getCallingPid();
+	int v7 = v8;
+	if (v7 == 0) {
+		UserHandle v9 = Binder.getCallingUserHandle();
+		int v10 = v9.getIdentifier();
+		int v11 = ContentProvider.getUserIdFromUri(p2, v10);
+		long v13 = Binder.clearCallingIdentity();
+		Uri v14 = ContentProvider.getUriWithoutUserId(p2);
+		String v15 = v14.getAuthority();
+		PackageManager v16 = this.mContext.getPackageManager();
+		int v17 = ContentProvider.getUserIdFromUri(p2, v11);
+		ProviderInfo v18 = v16.resolveContentProviderAsUser(v15, 0, v17);
+		Binder.restoreCallingIdentity(v13);
+		String v12 = ProviderInfo.packageName;
+		boolean v20 = Objects.equals(p1, v12);
+		if (v20 == 0) {
+			UserHandle v27 = Binder.getCallingUserHandle();
+			int v28 = v27.getIdentifier();
+			Uri v29 = ContentProvider.maybeAddUserId(p2, v28);
+			PinnedSliceState v30 = p0.getPinnedSlice(v29);
+			if (v30 == 0) {
+				boolean v32 = p3.unlinkToDeath(this.mDeathRecipient, 0);
+				Object v33 = this.mListeners.remove(p3);
+				boolean v35 = this.mPinnedPkgs.isEmpty();
+				if (v35 == 0) {
+					boolean v36 = this.mListeners.isEmpty();
+					if (v36 != 0) {
+						boolean v34 = 0;
+						boolean v31 = (v34 ^ 1);
+						if (v31 == 0) {
+							Object v38 = this.mPinnedSlicesByUri.remove(v29);
+							PinnedSliceState.setSlicePinned(0);
+							return;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+This is path 2 for the API with depth 1:
+public void unpinSlice(String p1, Uri p2, IBinder p3){
+	int v5 = Binder.getCallingUid();
+	int v6 = Binder.getCallingPid();
+	int v7 = SliceManagerService.checkAccess(p1, p2, v5, v6);
+	if (v7 == 0) {
+		UserHandle v8 = Binder.getCallingUserHandle();
+		int v9 = v8.getIdentifier();
+		int v10 = ContentProvider.getUserIdFromUri(p2, v9);
+		String v11 = SliceManagerService.getProviderPkg(p2, v10);
+		boolean v12 = Objects.equals(p1, v11);
+		if (v12 == 0) {
+			SliceManagerService.enforceCrossUser(p1, p2);
+			UserHandle v14 = Binder.getCallingUserHandle();
+			int v15 = v14.getIdentifier();
+			Uri v16 = ContentProvider.maybeAddUserId(p2, v15);
+			Object v18 = this.mPinnedSlicesByUri.get(v16);
+			if (v18 == 0) {
+				PinnedSliceState v17 = v18;
+				if (v17 == 0) {
+					boolean v20 = p3.unlinkToDeath(this.mDeathRecipient, 0);
+					Object v21 = this.mListeners.remove(p3);
+					boolean v22 = PinnedSliceState.hasPinOrListener();
+					boolean v19 = (v22 ^ 1);
+					if (v19 == 0) {
+						Object v24 = this.mPinnedSlicesByUri.remove(v16);
+						v24.destroy();
+						return;
+					}
+				}
+			}
+		}
+	}
+}
+
+
+This is path 3 for the API with depth 0:
+public void unpinSlice(String p1, Uri p2, IBinder p3){
+	p0.verifyCaller(p1);
+	p0.enforceAccess(p1, p2);
+	UserHandle v3 = Binder.getCallingUserHandle();
+	int v4 = v3.getIdentifier();
+	Uri v5 = ContentProvider.maybeAddUserId(p2, v4);
+	PinnedSliceState v6 = p0.getPinnedSlice(v5);
+	if (v6 == 0) {
+		boolean v7 = v6.unpin(p1, p3);
+		if (v7 == 0) {
+			p0.removePinnedSlice(v5);
+			return;
+		}
+	}
+}

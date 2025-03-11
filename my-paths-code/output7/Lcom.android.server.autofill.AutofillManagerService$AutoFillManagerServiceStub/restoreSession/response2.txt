@@ -1,0 +1,30 @@
+To assign an access control level to the `restoreSession` API, let's analyze the provided information.
+
+The `restoreSession` method interacts with sensitive components such as `IBinder`, `IResultReceiver`, and it involves user ID handling through `UserHandle.getCallingUserId()`. It also includes a check for the calling UID using `IAutoFillManager$Stub.getCallingUid()` and performs operations based on this UID, indicating some level of access control or permission checking.
+
+The method has two paths:
+1. The first path checks if the service is available for the user (`v5 == 0`), then it proceeds with further checks including the calling UID and whether the session is destroyed before performing actions like setting a client locked and updating tracked IDs.
+2. The second path also checks if the service is available but then directly calls `AutofillManagerService.send(p2, p3)` without additional permission or access control checks.
+
+The sinks provided suggest interactions that could potentially involve sensitive data or operations, such as switching activities or sending messages through services.
+
+Comparing this with the similar APIs:
+- `isServiceSupported` and `addClient` both have an access control level of `NONE`, but their code snippets show interactions with AutofillManagerService and adding clients, which seem less critical in terms of direct user data access or system modification compared to the operations within `restoreSession`.
+
+However, considering the checks for the calling UID (`IAutoFillManager$Stub.getCallingUid()`) and the user ID (`UserHandle.getCallingUserId()`), and how these are used to conditionally perform actions, it suggests that there is some level of access control or sensitivity in place. The fact that `restoreSession` directly manipulates session state and interacts with potentially sensitive services (like `AutofillManagerService`) implies a need for more than `NONE` level of access control.
+
+Given these considerations and the options available:
+- `NONE` seems too permissive given the checks and operations performed.
+- `NORMAL` might not fully capture the potential sensitivity or the need for restricted access indicated by UID checks.
+- `DANGEROUS` could be applicable due to the potential impact on user data or system state through session manipulation and service interactions, especially considering the direct interaction with `AutofillManagerService`.
+- `SYS_OR_SIG` seems less likely since there's no clear indication of system-level or signature-level permissions being required for these operations based on the provided code.
+
+Therefore, considering the sensitivity of the operations (session restoration, interaction with Autofill services) and the presence of UID checks which suggest some form of access control is intended, but without explicit indications of requiring system or signature level permissions:
+
+```json
+{
+  "access_control_level": "DANGEROUS"
+}
+```
+
+This choice reflects the potential risks associated with manipulating sessions and interacting with sensitive services, acknowledging that while specific system or signature permissions aren't explicitly mentioned, the nature of the operations suggests a need for more than basic access control.

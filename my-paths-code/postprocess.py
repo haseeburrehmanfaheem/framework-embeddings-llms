@@ -1,4 +1,4 @@
-# python ./postprocess.py --input-dir ./output/week1/output1 --prompt ../prompts/prompt2.txt --model llama3.2 --num-ctx 25000
+# python /u1/hfaheem/DLAndroidArtifact/my-paths-code/postprocess.py --input-dir /u1/hfaheem/DLAndroidArtifact/my-paths-code/output6 --prompt /u1/hfaheem/DLAndroidArtifact/prompts/prompt2.txt --model llama3.3 --num-ctx 25000
 import numpy as np
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
@@ -45,6 +45,43 @@ def get_java_code(row):
             path_id += 1
 
     return code_string
+
+
+def get_three_java_codes(row):
+    """Extract 3 Java code snippets: one from max depth, one from max-1, one from max-2.
+    
+    If there are not enough depths, take more from the highest available.
+    """
+    from collections import defaultdict
+
+    # Group by depth
+    depth_dict = defaultdict(list)
+    for entry in row["depths"]:
+        depth_dict[entry['depth']].append(entry)
+
+    # Sort available depths in descending order
+    sorted_depths = sorted(depth_dict.keys(), reverse=True)
+    
+    selected_entries = []
+    
+    # Try to get 1 code from max, max-1, and max-2 depths
+    for i in range(3):
+        if i < len(sorted_depths):  # Check if that depth exists
+            depth = sorted_depths[i]
+            selected_entries.append(depth_dict[depth].pop(0))  # Get one entry from this depth
+    
+    # If we still need more codes, fill from highest available
+    all_remaining_entries = sum(depth_dict.values(), [])  # Flatten remaining entries
+    while len(selected_entries) < 3 and all_remaining_entries:
+        selected_entries.append(all_remaining_entries.pop(0))
+
+    # Format output with depth information
+    return '\n\n'.join([
+        f"This is path {i+1} for the API with depth {entry['depth']}:\n{entry['java_code']}"
+        for i, entry in enumerate(selected_entries)
+    ])
+
+
 
 def remove_comments(json_string):
     """Remove single-line comments (//) from the JSON string."""
@@ -139,7 +176,12 @@ def get_code_embedding(code_snippet):
     Returns:
     - torch.Tensor: Embedding tensor for the input code.
     """
-    inputs = tokenizer.encode(code_snippet, return_tensors="pt").to("cuda")
+    
+    inputs_ids = tokenizer.encode(code_snippet.strip())  # Get tokenized IDs without truncation
+
+    if len(inputs_ids) > 512:
+        print(f"Warning: Code snippet exceeds 512 tokens ({len(inputs_ids)} tokens). It will be truncated.")
+    inputs = tokenizer.encode(code_snippet, return_tensors="pt", truncation=True, max_length=512).to("cuda")
     with torch.no_grad():
         embedding = model(inputs)[0]
     
@@ -168,59 +210,19 @@ def process_json_answer(json_answer, n=float("inf")):
 
 def calculate_embeddings(df):
     df["embeddings"] = None
-    for index, row in tqdm(df.iterrows(), total=len(df), desc="Processing Rows"):
+    for index, row in tqdm(df.iterrows(), total=len(df), desc="Processing Embeddings"):
         code_snippets = row["sink_code"]
         embeddings = []
+        method_signature = row["depths"][0]['java_code'].split("\n")[0]
         for each in code_snippets:
+            code = f'''
+            {method_signature}
+            {each}
+            }}
+            '''
             code_embedding = get_code_embedding(each)
             embeddings.append(code_embedding)
         df.at[index, "embeddings"] = embeddings
-
-def compute_most_similar(df):
-    """
-    Computes the most similar method for each method in the DataFrame based on cosine similarity of embeddings.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame containing 'method', 'embeddings', and 'sink_code'.
-
-    Returns:
-    - dict: A dictionary where each method maps to its most similar method, similarity score, and matching code pair.
-    """
-    similarities = {}
-
-    for index1, row1 in tqdm(df.iterrows(), total=len(df), desc="Computing Similarities"):
-        ep1_id = row1["method"]  
-        ep1_embeddings = row1["embeddings"]  # List of embeddings
-        ep1_sink_code = row1["sink_code"]  # Corresponding code snippets
-        
-        closest_ep = None
-        max_similarity = -1
-        similar_sink_pair = None
-        
-        for index2, row2 in df.iterrows():
-            if index1 == index2:
-                continue  
-            
-            ep2_id = row2["method"]
-            ep2_embeddings = row2["embeddings"]
-            ep2_sink_code = row2["sink_code"]
-            
-            # Compute pairwise similarities
-            for i, emb1 in enumerate(ep1_embeddings):
-                for j, emb2 in enumerate(ep2_embeddings):
-                    sim = torch.nn.functional.cosine_similarity(torch.tensor(emb1), torch.tensor(emb2), dim=0).item()
-                    if sim > max_similarity:
-                        max_similarity = sim
-                        closest_ep = ep2_id
-                        similar_sink_pair = (ep1_sink_code[i], ep2_sink_code[j])  
-        
-        similarities[ep1_id] = {
-            "closest_ep": closest_ep,
-            "max_similarity": max_similarity,
-            "similar_sink_pair": similar_sink_pair
-        }
-    
-    return similarities
 
 def get_top_similar_methods(similarities, top_n=2, threshold=0.7): # change threshold here
     filtered = [entry for entry in similarities if entry['similarity'] > threshold]
@@ -291,9 +293,8 @@ def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx
     ,
      options={
         'num_ctx': num_ctx,
-        # 'temperature': 0.3 # Todo : CHECK TEMPERATURE HERERERERERERERER
+        'temperature': 0.3 # Todo : Change temperature here
     }
-    
     )
     
     return {
@@ -304,36 +305,50 @@ def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx
 
 def compute_80_top2(df):
     similarities = {}
+    no_similar_count = 0  # Counter for methods with no similar pairs
 
     for index1, row1 in tqdm(df.iterrows(), total=len(df), desc="Computing Similarities"):
-        ep1_id = row1["method"] # name of the EP1
-        ep1_embeddings = row1["embeddings"] # list of embeddings for the EP1
-        ep1_sink_code = row1["sink_code"] # list of code snippets for the EP1
-        
+        ep1_id = row1["method"]  # Name of the EP1
+        ep1_embeddings = row1["embeddings"]  # List of embeddings for the EP1
+        ep1_sink_code = row1["sink_code"]  # List of code snippets for the EP1
+
         similar_sink_pairs = []  # List to store all similar sink code pairs with similarity > 0.8
-        
+        found_similar = False  # Flag to check if any similar pair is found for this EP1
+
         for index2, row2 in df.iterrows():
             if index1 == index2:
                 continue  
-            
-            ep2_id = row2["method"] # name of the EP2
-            ep2_embeddings = row2["embeddings"] # list of embeddings for the EP2
-            ep2_sink_code = row2["sink_code"] # list of code snippets for the EP2  
-            
+
+            ep2_id = row2["method"]  # Name of the EP2
+            ep2_embeddings = row2["embeddings"]  # List of embeddings for the EP2
+            ep2_sink_code = row2["sink_code"]  # List of code snippets for the EP2  
+
             # Compute similarities
             for i, emb1 in enumerate(ep1_embeddings):
                 for j, emb2 in enumerate(ep2_embeddings):
-                    sim = torch.nn.functional.cosine_similarity(torch.tensor(emb1), torch.tensor(emb2), dim=0).item()
-                    if sim > 0.5:   # Change threshold here, doesnt matter though because they will be filtered later on
+                    sim = torch.nn.functional.cosine_similarity(
+                        emb1.clone().detach(), emb2.clone().detach(), dim=0
+                    ).item()
+                    
+                    if sim > 0.5:  # Change threshold here, doesn't matter though because they will be filtered later on
                         similar_sink_pairs.append({
                             "similarity": sim,
                             "ep1_code": ep1_sink_code[i],
                             "ep2_id": ep2_id,
                             "ep2_code": ep2_sink_code[j]
                         })
-        
+                        found_similar = True  # Mark that at least one similarity was found
+
         # Store all similar pairs for the current EP
         similarities[ep1_id] = similar_sink_pairs
+
+        # Increment counter if no similar pairs were found for this method
+        if not found_similar:
+            no_similar_count += 1
+
+    # Print the total count of methods with no similar pairs
+    print(f"Total methods with no similar sink pairs: {no_similar_count}")
+
     return similarities
 
 def write_csvs(similarities, CSV_FILE):
@@ -434,7 +449,7 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
 
         if top_similar:
             prompt = create_prompt2_string(
-                top_similar, df, method_name, get_java_code(row), row["sink_code"]
+                top_similar, df, method_name, get_three_java_codes(row), row["sink_code"]
             )
             res = run_second_prompt_Ollama(prompt, model_prompt2, True, sys_prompt2, num_ctx)
         else:

@@ -1,0 +1,393 @@
+The method getHashFactor has the following code snippet:
+
+This is path 1 for the API with depth 2:
+public byte[] getHashFactor(LockscreenCredential p1, int p2){
+	UserManager v4 = LockSettingsService.getUserManagerFromCache(p2);
+	boolean v5 = v4.isCredentialSharableWithParent();
+	boolean v3 = v5;
+	if (v3 == 0) {
+		boolean v7 = this.mStorage.getBoolean("lockscreen.profilechallenge", 0, p2);
+		boolean v6 = v7;
+		if (v6 != 0) {
+			boolean v2 = 1;
+			if (v2 == 0) {
+				String v10 = LockSettingsStorage.getChildProfileLockFile(p2);
+				byte[] v11 = LockSettingsStorage.readFile(v10);
+				byte[] v9 = v11;
+				if (v9 == 0) {
+					byte[] v12 = Arrays.copyOfRange(v9, 0, 12);
+					byte[] v13 = Arrays.copyOfRange(v9, 12, v9.length);
+					StringBuilder v14 = new StringBuilder();
+					StringBuilder v16 = v14.append("profile_key_name_decrypt_");
+					StringBuilder v17 = v14.append(p2);
+					String v18 = v14.toString();
+					Key v19 = this.mJavaKeyStore.getKey(v18, 0);
+					Cipher v20 = Cipher.getInstance("AES/GCM/NoPadding");
+					GCMParameterSpec v21 = new GCMParameterSpec(128,v12);
+					v20.init(2, v19, v21);
+					byte[] v24 = v20.doFinal(v13);
+					LockscreenCredential v26 = new LockscreenCredential(4,v27);
+					byte[] v27 = Arrays.copyOf(v24, v24.length);
+					LockscreenCredential v25 = v26;
+					Arrays.fill(v24, 0);
+					boolean v31 = this.mEncryptedPasswords.contains(p2);
+					if (v31 == 0) {
+						UserInfo v32 = this.mUserManager.getProfileParent(p2);
+						if (v32 == 0) {
+							if (UserInfo.id == 0) {
+								String v33 = ManagedProfilePasswordCache.getEncryptionKeyName(p2);
+								Provider v34 = this.mKeyStore.getProvider();
+								KeyGenerator v35 = KeyGenerator.getInstance("AES", v34);
+								KeyGenParameterSpec$Builder v36 = new KeyGenParameterSpec$Builder(v33,3);
+								KeyGenParameterSpec$Builder v38 = v36.setKeySize(256);
+								String v39 = new String(1);
+								KeyGenParameterSpec$Builder v40 = v38.setBlockModes(v39);
+								int v41 = SyntheticPasswordCrypto.keyNamespace();
+								KeyGenParameterSpec$Builder v42 = v40.setNamespace(v41);
+								String v43 = new String(1);
+								KeyGenParameterSpec$Builder v44 = v42.setEncryptionPaddings(v43);
+								KeyGenParameterSpec$Builder v45 = v44.setUserAuthenticationRequired(1);
+								KeyGenParameterSpec$Builder v46 = v45.setUserAuthenticationValidityDurationSeconds(this.CACHE_TIMEOUT_SECONDS);
+								KeyGenParameterSpec v47 = v46.build();
+								v35.init(v47);
+								SecretKey v49 = v35.generateKey();
+								Cipher v50 = Cipher.getInstance("AES/GCM/NoPadding");
+								v50.init(1, v49);
+								byte[] v52 = v25.getCredential();
+								byte[] v53 = v50.doFinal(v52);
+								byte[] v54 = v50.getIV();
+								LockscreenCredential v8 = v25;
+								if (p2 != -9999) {
+									PersistentDataBlockManagerInternal v58 = LockSettingsStorage.getPersistentDataBlockManager();
+									if (v58 != 0) {
+										byte[] v59 = v58.getFrpCredentialHandle();
+										LockSettingsStorage$PersistentData v60 = LockSettingsStorage$PersistentData.fromBytes(v59);
+										LockSettingsStorage$PersistentData v57 = v60;
+										if (LockSettingsStorage$PersistentData.type == 1) {
+											if (LockSettingsStorage$PersistentData.type != 2) {
+												boolean v56 = 0;
+												if (v56 != 0) {
+													long v64 = this.mStorage.getLong("sp-handle", 0, p2);
+													long v62 = v64;
+													long v61 = v62;
+													if (this.mGateKeeperService == 0) {
+														IBinder v66 = ServiceManager.getService("android.service.gatekeeper.IGateKeeperService");
+														if (v66 == 0) {
+															LockSettingsService$GateKeeperDiedRecipient v67 = new LockSettingsService$GateKeeperDiedRecipient(LockSettingsService,0);
+															v66.linkToDeath(v67, 0);
+															if (v66 != 0) {
+																IInterface v71 = v66.queryLocalInterface("android.service.gatekeeper.IGateKeeperService");
+																if (v71 == 0) {
+																	if (v71 instanceof IGateKeeperService == 0) {
+																		IGateKeeperService$Stub$Proxy v72 = new IGateKeeperService$Stub$Proxy(v66);
+																		IGateKeeperService v70 = v72;
+																		this.mGateKeeperService = v70;
+																		IGateKeeperService v65 = v70;
+																		SyntheticPasswordManager$AuthenticationResult v75 = new SyntheticPasswordManager$AuthenticationResult();
+																		byte[] v78 = this.mStorage.readSyntheticPasswordState(p2, v61, "pwd");
+																		byte[] v77 = v78;
+																		SyntheticPasswordManager$PasswordData v80 = new SyntheticPasswordManager$PasswordData();
+																		ByteBuffer v82 = ByteBuffer.allocate(v77.length);
+																		ByteBuffer v83 = v82.put(v77, 0, v77.length);
+																		Buffer v84 = v82.flip();
+																		int v85 = v82.getInt();
+																		this.credentialType = v85;
+																		byte v86 = v82.get();
+																		this.scryptN = v86;
+																		byte v87 = v82.get();
+																		this.scryptR = v87;
+																		byte v88 = v82.get();
+																		this.scryptP = v88;
+																		int v89 = v82.getInt();
+																		[B v90 = new [B(v89);
+																		this.salt = v90;
+																		ByteBuffer v91 = v82.get(v90);
+																		int v92 = v82.getInt();
+																		if (v92 <= 0) {
+																			[B v93 = new [B(v92);
+																			this.passwordHandle = v93;
+																			ByteBuffer v94 = v82.get(v93);
+																			SyntheticPasswordManager$PasswordData v79 = v80;
+																			if (SyntheticPasswordManager$PasswordData.credentialType != 2) {
+																				int v96 = LockscreenCredential.getType();
+																				if (v96 == 4) {
+																					int v97 = LockscreenCredential.getType();
+																					if (v97 != 3) {
+																						boolean v95 = 1;
+																						if (v95 != 0) {
+																							boolean v99 = p1.isNone();
+																							if (v99 == 0) {
+																								byte[] v100 = SyntheticPasswordManager.scrypt(this.DEFAULT_PASSWORD, SyntheticPasswordManager$PasswordData.salt, (1 << SyntheticPasswordManager$PasswordData.scryptN), (1 << SyntheticPasswordManager$PasswordData.scryptR), (1 << SyntheticPasswordManager$PasswordData.scryptP), 32);
+																								byte[] v98 = v100;
+																								byte[] v102 = SyntheticPasswordManager.loadState("weaver", v61, p2);
+																								if (v102 == 0) {
+																									if (v102.length == 5) {
+																										ByteBuffer v103 = ByteBuffer.allocate(5);
+																										ByteBuffer v104 = v103.put(v102, 0, v102.length);
+																										Buffer v105 = v103.flip();
+																										byte v106 = v103.get();
+																										if (v106 == 1) {
+																											int v107 = v103.getInt();
+																											int v101 = v107;
+																											if (v101 == -1) {
+																												boolean v108 = SyntheticPasswordManager.isWeaverAvailable();
+																												if (v108 != 0) {
+																													byte[] v109 = SyntheticPasswordManager.passwordTokenToWeaverKey(v98);
+																													if (v101 == -1) {
+																														if (v101 >= WeaverConfig.slots) {
+																															if (v109 != 0) {
+																																[B v111 = new [B(WeaverConfig.keySize);
+																																VerifyCredentialResponse v112 = new VerifyCredentialResponse(1);
+																																ArrayList v113 = SyntheticPasswordManager.toByteArrayList(v111);
+																																SyntheticPasswordManager$$ExternalSyntheticLambda1 v114 = new SyntheticPasswordManager$$ExternalSyntheticLambda1(v112,v101);
+																																this.mWeaver.read(v101, v113, v114);
+																																VerifyCredentialResponse v110 = v112[0];
+																																SyntheticPasswordManager$AuthenticationResult.gkResponse = v110;
+																																int v117 = this.mResponseCode;
+																																if (v117 == 0) {
+																																	byte[] v118 = this.mGatekeeperHAT;
+																																	[[B v120 = new [[B(1);
+																																	byte[] v121 = SyntheticPasswordCrypto.personalisedHash(this.PERSONALISATION_WEAVER_PASSWORD, v120);
+																																	[B v122 = new [B((v98.length + v121.length));
+																																	System.arraycopy(v98, 0, v122, 0, v98.length);
+																																	System.arraycopy(v121, 0, v122, v98.length, v121.length);
+																																	byte[] v119 = v122;
+																																	if (0 == 0) {
+																																		0.onCredentialVerified();
+																																		byte[] v127 = SyntheticPasswordManager.loadState("spblob", v61, p2);
+																																		if (v127 != 0) {
+																																			SyntheticPasswordManager$SyntheticPasswordBlob v128 = SyntheticPasswordManager$SyntheticPasswordBlob.fromBytes(v127);
+																																			if (SyntheticPasswordManager$SyntheticPasswordBlob.mVersion == 3) {
+																																				if (SyntheticPasswordManager$SyntheticPasswordBlob.mVersion == 2) {
+																																					if (SyntheticPasswordManager$SyntheticPasswordBlob.mVersion != 1) {
+																																						if (SyntheticPasswordManager$SyntheticPasswordBlob.mType != 0) {
+																																							if (SyntheticPasswordManager$SyntheticPasswordBlob.mVersion != 1) {
+																																								String v129 = SyntheticPasswordManager.getKeyName(v61);
+																																								byte[] v130 = SyntheticPasswordCrypto.decryptBlobV1(v129, SyntheticPasswordManager$SyntheticPasswordBlob.mContent, transformUnderSecdiscardable());
+																																								if (v130 != 0) {
+																																									SyntheticPasswordManager$AuthenticationToken v131 = new SyntheticPasswordManager$AuthenticationToken(SyntheticPasswordManager$SyntheticPasswordBlob.mVersion);
+																																									if (0 == 1) {
+																																										if (0 != 2) {
+																																											boolean v133 = SyntheticPasswordManager.loadEscrowData(v131, p2);
+																																											if (v133 != 0) {
+																																												v131.recreateFromEscrow(v130);
+																																												if (SyntheticPasswordManager$SyntheticPasswordBlob.mVersion != 1) {
+																																													SyntheticPasswordManager.createSyntheticPasswordBlob(v61, 0, v131, transformUnderSecdiscardable(), sidFromPasswordHandle(), p2);
+																																													SyntheticPasswordManager$AuthenticationToken v126 = v131;
+																																													SyntheticPasswordManager$AuthenticationResult.authToken = v126;
+																																													byte[] v145 = v126.deriveGkPassword();
+																																													VerifyCredentialResponse v146 = SyntheticPasswordManager.verifyChallengeInternal(v65, v145, 0, p2);
+																																													VerifyCredentialResponse v144 = v146;
+																																													SyntheticPasswordManager$AuthenticationResult.gkResponse = v144;
+																																													if (SyntheticPasswordManager$AuthenticationResult.authToken == 0) {
+																																														boolean v148 = SyntheticPasswordManager.hasState("metrics", v61, p2);
+																																														boolean v147 = v148;
+																																														if (v147 != 0) {
+																																															byte[] v150 = SyntheticPasswordManager$AuthenticationResult.authToken.deriveMetricsKey();
+																																															[B v151 = new [B(0);
+																																															VersionedPasswordMetrics v152 = new VersionedPasswordMetrics(p1);
+																																															byte[] v154 = v152.serialize();
+																																															byte[] v155 = SyntheticPasswordCrypto.encrypt(v150, v151, v154);
+																																															SyntheticPasswordManager.saveState("metrics", v155, v61, p2);
+																																															SyntheticPasswordManager$AuthenticationResult v74 = v75;
+																																															if (SyntheticPasswordManager$AuthenticationResult.authToken != 0) {
+																																																byte[] v158 = this.PERSONALIZATION_PASSWORD_HASH;
+																																																if (this.mVersion != 3) {
+																																																	SP800Derive v160 = new SP800Derive(this.mSyntheticPassword);
+																																																	byte[] v162 = SyntheticPasswordManager.-$$Nest$sfgetPERSONALISATION_CONTEXT();
+																																																	byte[] v163 = v160.withContext(v158, v162);
+																																																	byte[] v159 = v163;
+																																																	byte[] v157 = v159;
+																																																	p0.scheduleGc();
+																																																	return v157;
+																																																}
+																																															}
+																																														}
+																																													}
+																																												}
+																																											}
+																																										}
+																																									}
+																																								}
+																																							}
+																																						}
+																																					}
+																																				}
+																																			}
+																																		}
+																																	}
+																																}
+																															}
+																														}
+																													}
+																												}
+																											}
+																										}
+																									}
+																								}
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+This is path 2 for the API with depth 1:
+public byte[] getHashFactor(LockscreenCredential p1, int p2){
+	boolean v3 = LockSettingsService.isCredentialSharableWithParent(p2);
+	if (v3 == 0) {
+		boolean v4 = LockSettingsService.getSeparateProfileChallengeEnabledInternal(p2);
+		if (v4 != 0) {
+			boolean v2 = 1;
+			if (v2 == 0) {
+				byte[] v6 = this.mStorage.readChildProfileLock(p2);
+				if (v6 == 0) {
+					byte[] v7 = Arrays.copyOfRange(v6, 0, 12);
+					byte[] v8 = Arrays.copyOfRange(v6, 12, v6.length);
+					StringBuilder v9 = new StringBuilder();
+					StringBuilder v11 = v9.append("profile_key_name_decrypt_");
+					StringBuilder v12 = v9.append(p2);
+					String v13 = v9.toString();
+					Key v14 = this.mJavaKeyStore.getKey(v13, 0);
+					Cipher v15 = Cipher.getInstance("AES/GCM/NoPadding");
+					GCMParameterSpec v16 = new GCMParameterSpec(128,v7);
+					v15.init(2, v14, v16);
+					byte[] v19 = v15.doFinal(v8);
+					LockscreenCredential v20 = LockscreenCredential.createManagedPassword(v19);
+					Arrays.fill(v19, 0);
+					this.mManagedProfilePasswordCache.storePassword(p2, v20);
+					LockscreenCredential v5 = v20;
+					if (p2 != -9999) {
+						LockSettingsStorage$PersistentData v24 = this.mStorage.readPersistentDataBlock();
+						if (LockSettingsStorage$PersistentData.type == 1) {
+							if (LockSettingsStorage$PersistentData.type != 2) {
+								boolean v23 = 0;
+								if (v23 != 0) {
+									long v26 = LockSettingsService.getLong("sp-handle", 0, p2);
+									long v25 = v26;
+									if (this.mGateKeeperService == 0) {
+										IBinder v28 = ServiceManager.getService("android.service.gatekeeper.IGateKeeperService");
+										if (v28 == 0) {
+											LockSettingsService$GateKeeperDiedRecipient v29 = new LockSettingsService$GateKeeperDiedRecipient(LockSettingsService,0);
+											v28.linkToDeath(v29, 0);
+											IGateKeeperService v32 = IGateKeeperService$Stub.asInterface(v28);
+											this.mGateKeeperService = v32;
+											IGateKeeperService v27 = v32;
+											SyntheticPasswordManager$AuthenticationResult v34 = new SyntheticPasswordManager$AuthenticationResult();
+											byte[] v36 = SyntheticPasswordManager.loadState("pwd", v25, p2);
+											SyntheticPasswordManager$PasswordData v37 = SyntheticPasswordManager$PasswordData.fromBytes(v36);
+											boolean v38 = p1.checkAgainstStoredType(SyntheticPasswordManager$PasswordData.credentialType);
+											if (v38 != 0) {
+												byte[] v39 = SyntheticPasswordManager.computePasswordToken(p1, v37);
+												int v40 = SyntheticPasswordManager.loadWeaverSlot(v25, p2);
+												if (v40 == -1) {
+													boolean v41 = SyntheticPasswordManager.isWeaverAvailable();
+													if (v41 != 0) {
+														byte[] v42 = SyntheticPasswordManager.passwordTokenToWeaverKey(v39);
+														VerifyCredentialResponse v43 = SyntheticPasswordManager.weaverVerify(v40, v42);
+														SyntheticPasswordManager$AuthenticationResult.gkResponse = v43;
+														int v44 = v43.getResponseCode();
+														if (v44 == 0) {
+															byte[] v45 = SyntheticPasswordManager$AuthenticationResult.gkResponse.getGatekeeperHAT();
+															byte[] v46 = SyntheticPasswordManager.transformUnderWeaverSecret(v39, v45);
+															if (0 == 0) {
+																0.onCredentialVerified();
+																SyntheticPasswordManager$AuthenticationToken v48 = SyntheticPasswordManager.unwrapSyntheticPasswordBlob(v25, 0, transformUnderSecdiscardable(), sidFromPasswordHandle(), p2);
+																SyntheticPasswordManager$AuthenticationResult.authToken = v48;
+																VerifyCredentialResponse v49 = SyntheticPasswordManager.verifyChallenge(v27, v48, 0, p2);
+																SyntheticPasswordManager$AuthenticationResult.gkResponse = v49;
+																if (SyntheticPasswordManager$AuthenticationResult.authToken == 0) {
+																	boolean v50 = SyntheticPasswordManager.hasPasswordMetrics(v25, p2);
+																	if (v50 != 0) {
+																		SyntheticPasswordManager.savePasswordMetrics(p1, SyntheticPasswordManager$AuthenticationResult.authToken, v25, p2);
+																		SyntheticPasswordManager$AuthenticationResult v33 = v34;
+																		if (SyntheticPasswordManager$AuthenticationResult.authToken != 0) {
+																			byte[] v53 = SyntheticPasswordManager.-$$Nest$sfgetPERSONALIZATION_PASSWORD_HASH();
+																			byte[] v54 = SyntheticPasswordManager$AuthenticationToken.derivePassword(v53);
+																			byte[] v52 = v54;
+																			LockSettingsService$$ExternalSyntheticLambda3 v56 = new LockSettingsService$$ExternalSyntheticLambda3();
+																			boolean v58 = this.mHandler.postDelayed(v56, 2000);
+																			return v52;
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+This is path 3 for the API with depth 0:
+public byte[] getHashFactor(LockscreenCredential p1, int p2){
+	boolean v2 = p0.isProfileWithUnifiedLock(p2);
+	if (v2 == 0) {
+		LockscreenCredential v3 = p0.getDecryptedPasswordForTiedProfile(p2);
+		boolean v4 = p0.isSyntheticPasswordBasedCredentialLocked(p2);
+		if (v4 != 0) {
+			long v5 = p0.getSyntheticPasswordHandleLocked(p2);
+			IGateKeeperService v6 = p0.getGateKeeperService();
+			SyntheticPasswordManager$AuthenticationResult v7 = this.mSpManager.unwrapPasswordBasedSyntheticPassword(v6, v5, p1, p2, 0);
+			if (SyntheticPasswordManager$AuthenticationResult.authToken != 0) {
+				byte[] v8 = SyntheticPasswordManager$AuthenticationResult.authToken.derivePasswordHashFactor();
+				p0.scheduleGc();
+				return v8;
+			}
+		}
+	}
+}
+
+and the following sink code:
+['UserManager v4 = LockSettingsService.getUserManagerFromCache(p2);\nboolean v5 = v4.isCredentialSharableWithParent();\nbyte[] v11 = LockSettingsStorage.readFile(v10);\nKey v19 = this.mJavaKeyStore.getKey(v18, 0);\nCipher v20 = Cipher.getInstance("AES/GCM/NoPadding");\nbyte[] v24 = v20.doFinal(v13);', 'boolean v3 = LockSettingsService.isCredentialSharableWithParent(p2);\nbyte[] v6 = this.mStorage.readChildProfileLock(p2);\nKey v14 = this.mJavaKeyStore.getKey(v13, 0);\nCipher v15 = Cipher.getInstance("AES/GCM/NoPadding");\nbyte[] v19 = v15.doFinal(v8);', 'LockscreenCredential v3 = p0.getDecryptedPasswordForTiedProfile(p2);\nlong v5 = p0.getSyntheticPasswordHandleLocked(p2);\nIGateKeeperService v6 = p0.getGateKeeperService();\nSyntheticPasswordManager$AuthenticationResult v7 = this.mSpManager.unwrapPasswordBasedSyntheticPassword(v6, v5, p1, p2, 0);']
+
+The method getHashFactor has the following similar APIs:
+
+- API Name: resetKeyStore(I)V with Similarity Score: 0.9151356816291809
+  - Access Control Level: SYS_OR_SIG and the following code:
+UserManager v11 = LockSettingsService.getUserManagerFromCache(UserInfo.id);
+boolean v12 = v11.isCredentialSharableWithParent();
+String v26 = v22.toString();
+Key v27 = this.mJavaKeyStore.getKey(v26, 0);
+Cipher v28 = Cipher.getInstance("AES/GCM/NoPadding");
+v28.init(2, v27, v29);
+byte[] v32 = v28.doFinal(v21);
+LockscreenCredential v33 = LockscreenCredential.createManagedPassword(v32);
+v44.clearNamespace(2, 102);
+
+- API Name: addWeakEscrowToken([BILcom/android/internal/widget/IWeakEscrowTokenActivatedListener;)J with Similarity Score: 0.8773435354232788
+  - Access Control Level: SYS_OR_SIG and the following code:
+boolean v10 = LockSettingsService.isUserSecure(p2);
+long v12 = LockSettingsService.getSyntheticPasswordHandleLocked(p2);
+LockscreenCredential v14 = LockscreenCredential.createNone();
+SyntheticPasswordManager$AuthenticationResult v15 = this.mSpManager.unwrapPasswordBasedSyntheticPassword(v13, v12, v14, p2, 0);
+
