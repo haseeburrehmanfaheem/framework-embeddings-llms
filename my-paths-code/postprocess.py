@@ -240,11 +240,12 @@ def get_top_similar_methods(similarities, top_n=2, threshold=0.7): # change thre
     
     return extracted_results
 
-def create_prompt2_string(top_similar, df, original_method, original_code, sink_code):
+def create_prompt2_string(top_similar, df, original_method, original_code, sink_code, method_name_unprocessed):
     if not top_similar:
         return "No similar APIs found"  # Return an empty string if there are no similar methods
     
-    prompt = f"The method {original_method} has the following code snippet:\n\n"
+    original_class = df[df["method"] == method_name_unprocessed]["service_name"].values[0]
+    prompt = f"The method {original_method} in the following class {original_class} has the following code snippet:\n\n"
     prompt += f"{original_code}\n" 
     prompt += f"and the following sink code:\n"
     prompt += f"{sink_code}\n\n"
@@ -257,9 +258,10 @@ def create_prompt2_string(top_similar, df, original_method, original_code, sink_
 
         # Find access control level for ep2_id
         access_control = df[df["method"] == ep2_id]["access control level"].values
+        class_name = df[df["method"] == ep2_id]["service_name"].values[0]
         access_control_str = access_control[0] if len(access_control) > 0 else "Unknown"
 
-        prompt += f"- API Name: {ep2_id} with"
+        prompt += f"- API Name: {ep2_id} in the following Class: {class_name} with"
         prompt += f" Similarity Score: {entry.get('similarity', 'N/A')}\n"
         prompt += f"  - Access Control Level: {access_control_str} and the following code:\n"
         prompt += f"{ep2_code}\n\n"
@@ -402,7 +404,7 @@ def write_csvs(similarities, CSV_FILE):
 
 
 
-    third_path = os.path.join(CSV_FILE, "_top2code" + ".csv")
+    third_path = os.path.join(CSV_FILE, "_topncode" + ".csv")
     with open(third_path, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
 
@@ -414,7 +416,7 @@ def write_csvs(similarities, CSV_FILE):
             
             if similar_pairs:
                 # Sort the pairs by similarity in descending order
-                top_pairs = sorted(similar_pairs, key=lambda x: x["similarity"], reverse=True)[:2]
+                top_pairs = sorted(similar_pairs, key=lambda x: x["similarity"], reverse=True)
                 for pair in top_pairs:
                     writer.writerow([
                         ep,
@@ -424,7 +426,7 @@ def write_csvs(similarities, CSV_FILE):
                         pair['similarity']
                     ])
             else:
-                writer.writerow([ep, "No similar EPs with similarity > 0.8", "", "", ""])
+                writer.writerow([ep, "No similar EPs with similarity > 0.5", "", "", ""])
 
     print(f"Data has been written to {CSV_FILE}")
 
@@ -449,7 +451,7 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
 
         if top_similar:
             prompt = create_prompt2_string(
-                top_similar, df, method_name, get_three_java_codes(row), row["sink_code"]
+                top_similar, df, method_name, get_three_java_codes(row), row["sink_code"], full_method_name
             )
             res = run_second_prompt_Ollama(prompt, model_prompt2, True, sys_prompt2, num_ctx)
         else:

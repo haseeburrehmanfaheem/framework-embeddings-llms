@@ -113,49 +113,72 @@ def run_ollama_prompt(method_code, model_name, sys_prompt, num_ctx):
         "response": response['message']['content']
     }
 
+
+def try_extract_and_parse(pattern, input_string, remove_comments_first=False):
+    """Extract using the given regex pattern and parse JSON."""
+    json_blocks = re.findall(pattern, input_string, re.DOTALL)
+    for block in reversed(json_blocks):
+        block = block.strip()
+        # First attempt without removing comments
+        try:
+            return json.loads(block)
+        except json.JSONDecodeError:
+            pass
+
+        # If that fails and remove_comments_first is True, try after removing comments
+        if remove_comments_first:
+            cleaned_block = remove_comments(block)
+            try:
+                return json.loads(cleaned_block)
+            except json.JSONDecodeError:
+                continue
+    return None
+
+def try_extract_boxed_json(input_string, remove_comments_first=False):
+    """Try to extract JSON from LaTeX-style boxed expressions of the form: $\boxed{ ... }$."""
+    boxed_blocks = re.findall(r'\$\s*\\boxed\s*\{(.*?)\}\s*\$', input_string, re.DOTALL)
+    for block in boxed_blocks:
+        block = block.strip()
+
+        # First attempt without removing comments
+        try:
+            return json.loads(block)
+        except json.JSONDecodeError:
+            pass
+
+        # If that fails and remove_comments_first is True, try after removing comments
+        if remove_comments_first:
+            cleaned_block = remove_comments(block)
+            try:
+                return json.loads(cleaned_block)
+            except json.JSONDecodeError:
+                continue
+    return None
+
+def try_extract_curly_braces(input_string, remove_comments_first=False):
+    """Final fallback: Look for the first substring that starts with '{' and ends with '}'."""
+    match = re.search(r'(\{.*\})', input_string, re.DOTALL)
+    if match:
+        block = match.group(1).strip()
+
+        # First attempt without removing comments
+        try:
+            return json.loads(block)
+        except json.JSONDecodeError:
+            pass
+
+        # If that fails and remove_comments_first is True, try after removing comments
+        if remove_comments_first:
+            cleaned_block = remove_comments(block)
+            try:
+                return json.loads(cleaned_block)
+            except json.JSONDecodeError:
+                return None
+    return None
+
 def remove_comments(json_string):
     """Remove single-line comments (//) from the JSON string."""
     return re.sub(r'//.*', '', json_string)
-
-def try_extract_and_parse(pattern, input_string):
-    """Extract using the given regex pattern and parse JSON after cleaning comments."""
-    json_blocks = re.findall(pattern, input_string, re.DOTALL)
-    for block in reversed(json_blocks):
-        cleaned_block = remove_comments(block).strip()
-        try:
-            return json.loads(cleaned_block)
-        except json.JSONDecodeError:
-            continue
-    return None
-
-def try_extract_boxed_json(input_string):
-    """
-    Try to extract JSON from LaTeX-style boxed expressions of the form:
-    $\boxed{ ... }$
-    """
-    boxed_blocks = re.findall(r'\$\s*\\boxed\s*\{(.*?)\}\s*\$', input_string, re.DOTALL)
-    for block in boxed_blocks:
-        cleaned_block = remove_comments(block).strip()
-        # Unescape any escaped braces if needed
-        cleaned_block = cleaned_block.replace(r'\{', '{').replace(r'\}', '}')
-        try:
-            return json.loads(cleaned_block)
-        except json.JSONDecodeError:
-            continue
-    return None
-
-def try_extract_curly_braces(input_string):
-    """
-    Final fallback: Look for the first substring that starts with '{' and ends with '}'.
-    """
-    match = re.search(r'(\{.*\})', input_string, re.DOTALL)
-    if match:
-        cleaned_block = remove_comments(match.group(1)).strip()
-        try:
-            return json.loads(cleaned_block)
-        except json.JSONDecodeError:
-            return None
-    return None
 
 def extract_json_from_string(input_string):
     """
@@ -165,33 +188,60 @@ def extract_json_from_string(input_string):
       3. The entire string (if valid JSON).
       4. LaTeX-style boxed JSON (e.g. $\boxed{ ... }$).
       5. The first substring that starts with '{' and ends with '}'.
+    Tries first without removing comments, then retries with removing comments.
     """
+
     # 1. Try blocks tagged explicitly as JSON
     pattern_json = r"```json\s*\n(.*?)```"
-    result = try_extract_and_parse(pattern_json, input_string)
+    result = try_extract_and_parse(pattern_json, input_string, remove_comments_first=False)
+    if result is not None:
+        return result
+
+    # Retry with comment removal
+    result = try_extract_and_parse(pattern_json, input_string, remove_comments_first=True)
     if result is not None:
         return result
 
     # 2. Fallback: try any block delimited by triple backticks
     pattern_any = r"```\s*\n(.*?)```"
-    result = try_extract_and_parse(pattern_any, input_string)
+    result = try_extract_and_parse(pattern_any, input_string, remove_comments_first=False)
+    if result is not None:
+        return result
+
+    # Retry with comment removal
+    result = try_extract_and_parse(pattern_any, input_string, remove_comments_first=True)
     if result is not None:
         return result
 
     # 3. Try parsing the entire input string as JSON
     try:
-        cleaned_input = remove_comments(input_string).strip()
-        return json.loads(cleaned_input)
+        return json.loads(input_string.strip())
+    except json.JSONDecodeError:
+        pass
+
+    # Retry with comment removal
+    try:
+        return json.loads(remove_comments(input_string).strip())
     except json.JSONDecodeError:
         pass
 
     # 4. Look for LaTeX-style boxed JSON (e.g. $\boxed{ ... }$)
-    result = try_extract_boxed_json(input_string)
+    result = try_extract_boxed_json(input_string, remove_comments_first=False)
+    if result is not None:
+        return result
+
+    # Retry with comment removal
+    result = try_extract_boxed_json(input_string, remove_comments_first=True)
     if result is not None:
         return result
 
     # 5. Final fallback: search for a substring that starts with '{' and ends with '}'
-    return try_extract_curly_braces(input_string)
+    result = try_extract_curly_braces(input_string, remove_comments_first=False)
+    if result is not None:
+        return result
+
+    # Retry with comment removal
+    return try_extract_curly_braces(input_string, remove_comments_first=True)
 
 
 def process_dataframe(df, output_folder, model_name, sys_prompt, num_ctx):

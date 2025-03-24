@@ -15,7 +15,7 @@ SHARED_DIR="$1"
 echo "Using shared directory: $SHARED_DIR"
 
 echo "Starting preprocessing..."    
-python ./preprocess.py --csv-dir ./input/Execution-Paths --output-dir "$SHARED_DIR" --prompt ../prompts/prompt1-11.txt --model llama3.3 --num-ctx 30000
+python ./preprocess.py --csv-dir ./input-tecno/Execution-Paths --output-dir "$SHARED_DIR" --prompt ../prompts/prompt1-11.txt --model llama3.3 --num-ctx 30000
 
 echo "Preprocessing completed."
 
