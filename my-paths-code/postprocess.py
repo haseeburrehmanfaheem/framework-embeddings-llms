@@ -81,7 +81,10 @@ def get_three_java_codes(row):
         for i, entry in enumerate(selected_entries)
     ])
 
-
+def remove_empty_embeddings(df):
+    # Filter out rows where the embeddings column is empty or None
+    df_filtered = df[df["embeddings"].apply(lambda x: x is not None and len(x) > 0)]
+    return df_filtered
 
 def remove_comments(json_string):
     """Remove single-line comments (//) from the JSON string."""
@@ -224,10 +227,36 @@ def calculate_embeddings(df):
             embeddings.append(code_embedding)
         df.at[index, "embeddings"] = embeddings
 
-def get_top_similar_methods(similarities, top_n=2, threshold=0.7): # change threshold here
+def get_top_similar_methods(similarities, top_n=2, threshold=0.7):
+    # Filter based on the similarity threshold
     filtered = [entry for entry in similarities if entry['similarity'] > threshold]
+    # Sort the filtered entries in descending order by similarity
     sorted_results = sorted(filtered, key=lambda x: x['similarity'], reverse=True)
-    top_results = sorted_results[:top_n]
+    
+    unique_ep2_ids = set()
+    unique_ep2_codes = set()
+    results = []
+    
+    for entry in sorted_results:
+        # Skip if the ep2_code is already in the results
+        if entry['ep2_code'] in unique_ep2_codes:
+            continue
+        
+        # If the ep2_id is already included, add the entry (if its ep2_code is new)
+        if entry['ep2_id'] in unique_ep2_ids:
+            results.append(entry)
+            unique_ep2_codes.add(entry['ep2_code'])
+        else:
+            # This is a new unique ep2_id
+            if len(unique_ep2_ids) < top_n:
+                unique_ep2_ids.add(entry['ep2_id'])
+                results.append(entry)
+                unique_ep2_codes.add(entry['ep2_code'])
+            else:
+                # Encountering a new unique ep2_id beyond our top_n limit; break out of the loop.
+                break
+
+    # Extract and return only the desired fields
     extracted_results = [
         {
             'ep2_code': entry['ep2_code'],
@@ -235,7 +264,7 @@ def get_top_similar_methods(similarities, top_n=2, threshold=0.7): # change thre
             'ep1_code': entry['ep1_code'],
             'similarity': entry['similarity']
         }
-        for entry in top_results
+        for entry in results
     ]
     
     return extracted_results
@@ -243,42 +272,39 @@ def get_top_similar_methods(similarities, top_n=2, threshold=0.7): # change thre
 def create_prompt2_string(top_similar, df, original_method, original_code, sink_code, method_name_unprocessed):
     if not top_similar:
         return "No similar APIs found"  # Return an empty string if there are no similar methods
-    
+
     original_class = df[df["method"] == method_name_unprocessed]["service_name"].values[0]
     prompt = f"The method {original_method} in the following class {original_class} has the following code snippet:\n\n"
-    prompt += f"{original_code}\n" 
+    prompt += f"{original_code}\n"
     prompt += f"and the following sink code:\n"
     prompt += f"{sink_code}\n\n"
     
-    
     prompt += f"The method {original_method} has the following similar APIs:\n\n"
+    
+    # Group entries by unique API method (ep2_id)
+    grouped = {}
     for entry in top_similar:
         ep2_id = entry["ep2_id"]
         ep2_code = entry["ep2_code"]
-
-        # Find access control level for ep2_id
+        similarity = entry.get("similarity", "N/A")
+        if ep2_id not in grouped:
+            grouped[ep2_id] = []
+        grouped[ep2_id].append((ep2_code, similarity))
+    
+    # Now iterate over each unique API and include all corresponding sink codes with their similarity scores
+    for ep2_id, code_entries in grouped.items():
+        # Get access control and class information from the dataframe
         access_control = df[df["method"] == ep2_id]["access control level"].values
         class_name = df[df["method"] == ep2_id]["service_name"].values[0]
         access_control_str = access_control[0] if len(access_control) > 0 else "Unknown"
-
-        prompt += f"- API Name: {ep2_id} in the following Class: {class_name} with"
-        prompt += f" Similarity Score: {entry.get('similarity', 'N/A')}\n"
-        prompt += f"  - Access Control Level: {access_control_str} and the following code:\n"
-        prompt += f"{ep2_code}\n\n"
-
-    # Add final instructions for assigning access control
-    # prompt += (
-    #     "Your task is to assign Access Control to a new android mehtod listed below. I will provide you with the original APIs code and the other similar APIs with their ground truth Access Control."
-    #     "Given this information, your task is to assign an access control to the "
-    #     f"{original_method} API. After the explanation, give the final access control "
-    #     "level for the API in JSON format as follows:\n"
-    #     "{ \"access_control_level\": \"...\" }.\n\n"
-    #     "You have 4 choices: NONE, NORMAL, DANGEROUS, SYS_OR_SIG. To make an informed decision, "
-    #     "carefully review other APIs (ground truth) that I have provided above that interact "
-    #     "with the same sinks, their assigned access control levels, and the semantics of those APIs. "
-    # )
-
+        
+        prompt += f"- API Name: {ep2_id} in the following Class: {class_name} with the following sink code entries:\n"
+        for code, similarity in code_entries:
+            prompt += f"  - Similarity: {similarity}, Code:\n{code}\n"
+        prompt += f"  - Access Control Level: {access_control_str}\n\n"
+    
     return prompt
+
     
 def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx):
     """ runs the second prompt - extract sinks from the traces
@@ -305,50 +331,72 @@ def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx
         "response": response['message']['content']
     }
 
-def compute_80_top2(df):
-    similarities = {}
-    no_similar_count = 0  # Counter for methods with no similar pairs
+def compute_80_top2(df, threshold=0.7):
+    # Preprocess all embeddings and metadata
+    all_embeddings = []
+    method_info = []  # List of tuples (method_id, code_snippet)
+    method_to_indices = {}  # Maps method to its embedding indices
 
-    for index1, row1 in tqdm(df.iterrows(), total=len(df), desc="Computing Similarities"):
-        ep1_id = row1["method"]  # Name of the EP1
-        ep1_embeddings = row1["embeddings"]  # List of embeddings for the EP1
-        ep1_sink_code = row1["sink_code"]  # List of code snippets for the EP1
+    for idx, row in df.iterrows():
+        method = row["method"]
+        embeddings = row["embeddings"]
+        codes = row["sink_code"]
+        indices = []
+        for emb, code in zip(embeddings, codes):
+            all_embeddings.append(emb.clone().detach())
+            method_info.append((method, code))
+            indices.append(len(all_embeddings) - 1)  # Current index
+        method_to_indices[method] = indices
 
-        similar_sink_pairs = []  # List to store all similar sink code pairs with similarity > 0.8
-        found_similar = False  # Flag to check if any similar pair is found for this EP1
+    # Move all embeddings to GPU and normalize
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    all_embeddings = torch.stack(all_embeddings).to(device)
+    all_embeddings = torch.nn.functional.normalize(all_embeddings, p=2, dim=1)
 
-        for index2, row2 in df.iterrows():
-            if index1 == index2:
-                continue  
+    similarities = {method: [] for method in method_to_indices.keys()}
 
-            ep2_id = row2["method"]  # Name of the EP2
-            ep2_embeddings = row2["embeddings"]  # List of embeddings for the EP2
-            ep2_sink_code = row2["sink_code"]  # List of code snippets for the EP2  
+    # Process each method's embeddings against all others
+    for method in tqdm(method_to_indices, desc="Processing methods"):
+        ep1_indices = method_to_indices[method]
+        if not ep1_indices:
+            continue
 
-            # Compute similarities
-            for i, emb1 in enumerate(ep1_embeddings):
-                for j, emb2 in enumerate(ep2_embeddings):
-                    sim = torch.nn.functional.cosine_similarity(
-                        emb1.clone().detach(), emb2.clone().detach(), dim=0
-                    ).item()
-                    
-                    if sim > 0.5:  # Change threshold here, doesn't matter though because they will be filtered later on
-                        similar_sink_pairs.append({
-                            "similarity": sim,
-                            "ep1_code": ep1_sink_code[i],
-                            "ep2_id": ep2_id,
-                            "ep2_code": ep2_sink_code[j]
-                        })
-                        found_similar = True  # Mark that at least one similarity was found
+        # Get other embeddings not belonging to this method
+        other_indices = [i for i in range(len(all_embeddings)) if method_info[i][0] != method]
+        if not other_indices:
+            continue
 
-        # Store all similar pairs for the current EP
-        similarities[ep1_id] = similar_sink_pairs
+        # Compute similarities in batches to manage memory
+        batch_size = 100000  # Adjust based on GPU memory
+        ep1_embs = all_embeddings[ep1_indices]
+        num_other = len(other_indices)
+        num_batches = (num_other + batch_size - 1) // batch_size
 
-        # Increment counter if no similar pairs were found for this method
-        if not found_similar:
-            no_similar_count += 1
+        for batch_idx in range(num_batches):
+            start = batch_idx * batch_size
+            end = min((batch_idx + 1) * batch_size, num_other)
+            batch_other_indices = other_indices[start:end]
+            other_embs = all_embeddings[batch_other_indices]
 
-    # Print the total count of methods with no similar pairs
+            # Compute cosine similarity matrix
+            sim_batch = torch.mm(ep1_embs, other_embs.T)
+            sim_batch = sim_batch.cpu().numpy()  # Move to CPU to save GPU memory
+
+            # Find pairs above threshold
+            rows, cols = (sim_batch > threshold).nonzero()
+            for i, j in zip(rows, cols):
+                ep1_code = method_info[ep1_indices[i]][1]
+                other_idx = batch_other_indices[j]
+                other_method, other_code = method_info[other_idx]
+                similarities[method].append({
+                    "similarity": sim_batch[i, j],
+                    "ep1_code": ep1_code,
+                    "ep2_id": other_method,
+                    "ep2_code": other_code
+                })
+
+    # Count methods with no similar pairs
+    no_similar_count = sum(1 for entries in similarities.values() if not entries)
     print(f"Total methods with no similar sink pairs: {no_similar_count}")
 
     return similarities
@@ -430,9 +478,6 @@ def write_csvs(similarities, CSV_FILE):
 
     print(f"Data has been written to {CSV_FILE}")
 
-import os
-import json
-from tqdm import tqdm
 
 def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2, sys_prompt2, num_ctx):
     df["json_answer2"] = None
@@ -529,6 +574,7 @@ def main():
     print(f"row with valid json  = {counter}")
 
     calculate_embeddings(df)
+    df = remove_empty_embeddings(df)
     similarities = compute_80_top2(df)
     write_csvs(similarities, args.input_dir)
     

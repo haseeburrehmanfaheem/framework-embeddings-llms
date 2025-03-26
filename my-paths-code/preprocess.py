@@ -99,7 +99,6 @@ def get_three_java_codes(row):
         for i, entry in enumerate(selected_entries)
     ])
 
-
 def run_ollama_prompt(method_code, model_name, sys_prompt, num_ctx):
     """Execute the analysis prompt with Ollama."""
     response = ollama.chat(
@@ -112,7 +111,6 @@ def run_ollama_prompt(method_code, model_name, sys_prompt, num_ctx):
         "user_message": method_code,
         "response": response['message']['content']
     }
-
 
 def try_extract_and_parse(pattern, input_string, remove_comments_first=False):
     """Extract using the given regex pattern and parse JSON."""
