@@ -1,28 +1,19 @@
-To determine the access control level for the `setNightDisplayCustomEndTime` method, let's analyze the provided information:
+To determine the access control level for the `setNightDisplayCustomEndTime` method, let's analyze the provided information and similar APIs.
 
-1. **Code Snippets**: The method has three paths with different depths, all of which involve setting a custom end time for night display using the `Settings$Secure.putIntForUser` method or calling an internal method (`setNightDisplayCustomEndTimeInternal`) that presumably does something similar.
+1. **Similar API Analysis**:
+   - `getNightDisplayCustomStartTime()` and `getNightDisplayCustomEndTime()` both have an access control level of `NONE`. This suggests that reading the custom start and end times does not pose a significant security risk.
+   - `setNightDisplayCustomStartTime()`, `resumeWifiDisplay()`, and `setNightDisplayAutoMode()` all have an access control level of `SYS_OR_SIG`. This indicates that setting or modifying display-related settings is considered sensitive and requires a higher level of access control.
 
-2. **Sink Code**: The sink code snippets show interactions with system settings and content resolvers, indicating that this method affects system-level settings.
+2. **Setter vs. Getter Methods**:
+   - Generally, setter methods are considered more sensitive than getter methods because they can modify system settings, which might have security implications.
+   - The fact that `getNightDisplayCustomStartTime()` and `getNightDisplayCustomEndTime()` have an access control level of `NONE` suggests that reading these values is not restricted. However, since `setNightDisplayCustomStartTime()` has a higher access control level (`SYS_OR_SIG`), it implies that modifying these settings (like setting the custom end time) should also be restricted to prevent unauthorized changes.
 
-3. **Similar APIs**:
-   - `getNightDisplayCustomStartTime` has a high similarity score and is assigned an access control level of `NONE`. This API retrieves the custom start time for night display, which is a read operation.
-   - The key difference between these similar APIs and `setNightDisplayCustomEndTime` is that `setNightDisplayCustomEndTime` modifies system settings (a write operation), whereas `getNightDisplayCustomStartTime` only reads them.
+3. **Code Semantics and Sinks**:
+   - The code for `setNightDisplayCustomEndTime` involves writing to secure settings (`Settings$Secure.putIntForUser`) which is a sensitive operation, similar to other methods classified as `SYS_OR_SIG`.
+   - The use of `Binder.clearCallingIdentity()` and `Binder.restoreCallingIdentity()` suggests that the method is careful about handling caller identity, which is important for security but does not directly imply a specific access control level.
 
-Given this analysis:
+Given these considerations, the most appropriate access control level for `setNightDisplayCustomEndTime` would be `SYS_OR_SIG`, as it involves modifying system settings related to display, similar to other methods that have been classified with this level of access control. This ensures that only system or signature applications can modify these sensitive settings, aligning with Android's security principles.
 
-- **Write Operations to System Settings**: Typically, methods that modify system settings are considered more sensitive than those that simply read from them. This sensitivity often warrants a higher access control level because modifying system settings can have broader implications on the device's behavior and security.
-  
-- **Comparison with Similar APIs**: The similar APIs provided (`getNightDisplayCustomStartTime`) are read-only and have an access control level of `NONE`, indicating they are not considered sensitive in terms of access control. However, since `setNightDisplayCustomEndTime` involves writing to system settings, it should be treated with more caution.
-
-- **Access Control Levels**:
-  - `NONE`: Typically for methods that do not affect security or privacy.
-  - `NORMAL`: For methods that have some impact but are generally not dangerous.
-  - `DANGEROUS`: Methods that can cause harm if misused, such as those that access sensitive data or modify system settings in significant ways.
-  - `SYS_OR_SIG`: For operations that require system or signature-level permissions, often because they are highly privileged.
-
-Considering the method modifies system settings related to night display and involves interactions that could potentially be sensitive (though not directly accessing user data), it seems reasonable to assign a moderate level of access control. However, since it does modify system settings, which can have security implications, the most appropriate choice would lean towards requiring some form of permission or access control.
-
-Given the options provided:
-
-The final answer is: 
-{ "access_control_level": "NORMAL" }
+```json
+{ "access_control_level": "SYS_OR_SIG" }
+```

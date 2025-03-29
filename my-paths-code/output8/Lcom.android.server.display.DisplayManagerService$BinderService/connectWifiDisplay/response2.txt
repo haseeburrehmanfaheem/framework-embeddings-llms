@@ -1,16 +1,31 @@
 To determine the access control level for the `connectWifiDisplay` method, let's analyze the provided information:
 
-1. **Code Snippets**: The method has three paths with different depths, but all of them ultimately lead to either `this.mWifiDisplayAdapter.requestConnectLocked(p1);`, `this.this$0.connectWifiDisplayInternal(p1);`, or `DisplayManagerService.-$$Nest$mconnectWifiDisplayInternal(this.this$0, p1);` as the sink. The use of `Binder.clearCallingIdentity()` and `Binder.restoreCallingIdentity(v3);` suggests that the method is interacting with system-level services and is taking steps to manage the caller's identity, which is a common practice when performing operations that require specific permissions or access levels.
+1. **Similar APIs and Their Access Control Levels**:
+   - `pauseWifiDisplay()V`: SYS_OR_SIG
+   - `forgetWifiDisplay(Ljava/lang/String;)V`: SYS_OR_SIG
+   - `startWifiDisplayScan()V`: SYS_OR_SIG
+   - `disconnectWifiDisplay()V`: NONE
+   - `getWifiDisplayStatus()Landroid/hardware/display/WifiDisplayStatus;`: NONE
 
-2. **Similar APIs**:
-   - `pauseWifiDisplay()V` has an access control level of `SYS_OR_SIG`. This suggests that pausing a WiFi display requires system or signature-level permission, indicating it's a sensitive operation.
-   - `forgetWifiDisplay(Ljava/lang/String;)V` also has an access control level of `SYS_OR_SIG`, implying that forgetting (or disconnecting from) a WiFi display is similarly restricted.
+2. **Semantics of the APIs**:
+   - The `connectWifiDisplay` method is involved in establishing a connection to a WiFi display, which implies modifying system settings or states related to display connectivity.
+   - Similar methods like `pauseWifiDisplay`, `forgetWifiDisplay`, and `startWifiDisplayScan` are also involved in managing WiFi display connections but have different access control levels assigned.
 
-Given these points, we can infer the following:
-- The operations related to WiFi displays (connecting, pausing, forgetting) seem to be sensitive and are restricted to system or signature-level permissions. This suggests that managing WiFi displays is not an operation that should be exposed to all applications without proper authorization.
-- The `connectWifiDisplay` method, by interacting with the display adapter or internal service methods for connecting a WiFi display, likely requires a similar level of access control as pausing or forgetting a WiFi display.
+3. **Sink Code Analysis**:
+   - The sink codes for `connectWifiDisplay` involve requesting a connection through the WiFi display adapter or calling internal methods to handle the connection process.
+   - Similar APIs' sink codes also deal with internal method calls for managing WiFi displays, indicating that these operations are critical and potentially sensitive.
 
-Therefore, considering the similarity in operations and the need for restricted access to manage WiFi displays securely, the most appropriate access control level for `connectWifiDisplay` would be `SYS_OR_SIG`, aligning with the levels assigned to its similar APIs.
+4. **Access Control Principles**:
+   - If a setter method (or an equivalent method that modifies system state) requires access control, the related getter method does not necessarily need the same level of restriction.
+   - However, if a getter method is protected, the corresponding setter should be secured with an equal or higher access control level.
+
+Given these considerations:
+
+- The `connectWifiDisplay` method modifies system state by initiating a connection to a WiFi display. This action could potentially introduce security risks or affect system stability if not properly controlled.
+- Similar methods (`pauseWifiDisplay`, `forgetWifiDisplay`, `startWifiDisplayScan`) that also modify system states related to WiFi displays have been assigned SYS_OR_SIG access control levels, indicating they require significant privileges to execute.
+- The exception is `disconnectWifiDisplay` with NONE access control and `getWifiDisplayStatus` which has no direct influence on the decision for `connectWifiDisplay` as it's a getter method.
+
+Considering the potential impact of connecting to a WiFi display on system security and stability, and aligning with the access control levels assigned to similar methods that manage WiFi display connections, the most appropriate access control level for `connectWifiDisplay` would be SYS_OR_SIG. This ensures that only system or signature applications can initiate such connections, thereby maintaining system integrity and security.
 
 ```json
 { "access_control_level": "SYS_OR_SIG" }

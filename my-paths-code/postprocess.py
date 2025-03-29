@@ -227,7 +227,7 @@ def calculate_embeddings(df):
             embeddings.append(code_embedding)
         df.at[index, "embeddings"] = embeddings
 
-def get_top_similar_methods(similarities, top_n=2, threshold=0.7):
+def get_top_similar_methods(similarities, top_n=5, threshold=0.7):
     # Filter based on the similarity threshold
     filtered = [entry for entry in similarities if entry['similarity'] > threshold]
     # Sort the filtered entries in descending order by similarity
@@ -256,13 +256,16 @@ def get_top_similar_methods(similarities, top_n=2, threshold=0.7):
                 # Encountering a new unique ep2_id beyond our top_n limit; break out of the loop.
                 break
 
-    # Extract and return only the desired fields
+    # Extract and return all relevant fields including sensitivity information
     extracted_results = [
         {
-            'ep2_code': entry['ep2_code'],
             'ep2_id': entry['ep2_id'],
+            'ep2_code': entry['ep2_code'],
             'ep1_code': entry['ep1_code'],
-            'similarity': entry['similarity']
+            'similarity': entry['similarity'],
+            'ep1_sink_idx': entry['ep1_sink_idx'],
+            'ep2_sink_idx': entry['ep2_sink_idx'],
+            'sensitivity_pair': entry['sensitivity_pair']
         }
         for entry in results
     ]
@@ -271,41 +274,54 @@ def get_top_similar_methods(similarities, top_n=2, threshold=0.7):
 
 def create_prompt2_string(top_similar, df, original_method, original_code, sink_code, method_name_unprocessed):
     if not top_similar:
-        return "No similar APIs found"  # Return an empty string if there are no similar methods
+        return "No similar APIs found"
 
     original_class = df[df["method"] == method_name_unprocessed]["service_name"].values[0]
-    prompt = f"The method {original_method} in the following class {original_class} has the following code snippet:\n\n"
-    prompt += f"{original_code}\n"
-    prompt += f"and the following sink code:\n"
-    prompt += f"{sink_code}\n\n"
+    prompt = f"The method {original_method} in class {original_class} has this code:\n\n{original_code}\n"
+    prompt += f"With these sensitive sinks (ordered by sensitivity, 0 = most sensitive):\n{sink_code}\n\n"
     
-    prompt += f"The method {original_method} has the following similar APIs:\n\n"
+    prompt += f"Similar APIs found (with sensitivity matching details):\n\n"
     
     # Group entries by unique API method (ep2_id)
     grouped = {}
     for entry in top_similar:
         ep2_id = entry["ep2_id"]
-        ep2_code = entry["ep2_code"]
-        similarity = entry.get("similarity", "N/A")
         if ep2_id not in grouped:
             grouped[ep2_id] = []
-        grouped[ep2_id].append((ep2_code, similarity))
+        grouped[ep2_id].append(entry)
     
-    # Now iterate over each unique API and include all corresponding sink codes with their similarity scores
-    for ep2_id, code_entries in grouped.items():
-        # Get access control and class information from the dataframe
-        access_control = df[df["method"] == ep2_id]["access control level"].values
+    for ep2_id, entries in grouped.items():
+        # Get metadata from dataframe
         class_name = df[df["method"] == ep2_id]["service_name"].values[0]
+        access_control = df[df["method"] == ep2_id]["access control level"].values
         access_control_str = access_control[0] if len(access_control) > 0 else "Unknown"
         
-        prompt += f"- API Name: {ep2_id} in the following Class: {class_name} with the following sink code entries:\n"
-        for code, similarity in code_entries:
-            prompt += f"  - Similarity: {similarity}, Code:\n{code}\n"
-        prompt += f"  - Access Control Level: {access_control_str}\n\n"
+        prompt += f"- {ep2_id} (Class: {class_name}, Access: {access_control_str})\n"
+        
+        for entry in entries:
+            ep1_idx = entry["ep1_sink_idx"]
+            ep2_idx = entry["ep2_sink_idx"]
+            similarity = entry["similarity"]
+            
+            # Explain sensitivity matching
+            sensitivity_info = ""
+            if ep1_idx == 0 and ep2_idx == 0:
+                sensitivity_info = "(Top-sensitive sinks matched)"
+            elif ep1_idx == 0:
+                sensitivity_info = f"(Top-sensitive sink in source matched to position {ep2_idx+1} in target)"
+            elif ep2_idx == 0:
+                sensitivity_info = f"(Position {ep1_idx+1} in source matched to top-sensitive sink in target)"
+            else:
+                sensitivity_info = f"(Position {ep1_idx+1} in source matched to position {ep2_idx+1} in target)"
+            
+            prompt += (
+                f"  • Similarity: {similarity:.3f} {sensitivity_info}\n"
+                f"  • Source sink (position {ep1_idx}):\n{entry['ep1_code']}\n"
+                f"  • Target sink (position {ep2_idx}):\n{entry['ep2_code']}\n\n"
+            )
     
     return prompt
-
-    
+   
 def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx):
     """ runs the second prompt - extract sinks from the traces
     """
@@ -331,10 +347,11 @@ def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx
         "response": response['message']['content']
     }
 
+
 def compute_80_top2(df, threshold=0.7):
     # Preprocess all embeddings and metadata
     all_embeddings = []
-    method_info = []  # List of tuples (method_id, code_snippet)
+    method_info = []  # List of tuples (method_id, code_snippet, sink_idx)
     method_to_indices = {}  # Maps method to its embedding indices
 
     for idx, row in df.iterrows():
@@ -342,10 +359,10 @@ def compute_80_top2(df, threshold=0.7):
         embeddings = row["embeddings"]
         codes = row["sink_code"]
         indices = []
-        for emb, code in zip(embeddings, codes):
+        for sink_idx, (emb, code) in enumerate(zip(embeddings, codes)):
             all_embeddings.append(emb.clone().detach())
-            method_info.append((method, code))
-            indices.append(len(all_embeddings) - 1)  # Current index
+            method_info.append((method, code, sink_idx))  # Add sink index
+            indices.append(len(all_embeddings) - 1)
         method_to_indices[method] = indices
 
     # Move all embeddings to GPU and normalize
@@ -366,7 +383,7 @@ def compute_80_top2(df, threshold=0.7):
         if not other_indices:
             continue
 
-        # Compute similarities in batches to manage memory
+        # Compute similarities in batches
         batch_size = 100000  # Adjust based on GPU memory
         ep1_embs = all_embeddings[ep1_indices]
         num_other = len(other_indices)
@@ -379,20 +396,27 @@ def compute_80_top2(df, threshold=0.7):
             other_embs = all_embeddings[batch_other_indices]
 
             # Compute cosine similarity matrix
-            sim_batch = torch.mm(ep1_embs, other_embs.T)
-            sim_batch = sim_batch.cpu().numpy()  # Move to CPU to save GPU memory
+            sim_batch = torch.mm(ep1_embs, other_embs.T).cpu().numpy()
 
             # Find pairs above threshold
             rows, cols = (sim_batch > threshold).nonzero()
             for i, j in zip(rows, cols):
-                ep1_code = method_info[ep1_indices[i]][1]
-                other_idx = batch_other_indices[j]
-                other_method, other_code = method_info[other_idx]
+                # Get EP1's metadata
+                ep1_global_idx = ep1_indices[i]
+                ep1_method, ep1_code, ep1_sink_idx = method_info[ep1_global_idx]
+                
+                # Get EP2's metadata
+                other_global_idx = batch_other_indices[j]
+                ep2_method, ep2_code, ep2_sink_idx = method_info[other_global_idx]
+
                 similarities[method].append({
                     "similarity": sim_batch[i, j],
                     "ep1_code": ep1_code,
-                    "ep2_id": other_method,
-                    "ep2_code": other_code
+                    "ep1_sink_idx": ep1_sink_idx,          # Index in EP1's sink_code
+                    "ep2_id": ep2_method,
+                    "ep2_code": ep2_code,
+                    "ep2_sink_idx": ep2_sink_idx,          # Index in EP2's sink_code
+                    "sensitivity_pair": (ep1_sink_idx, ep2_sink_idx)  # Tuple of positions
                 })
 
     # Count methods with no similar pairs
@@ -400,6 +424,7 @@ def compute_80_top2(df, threshold=0.7):
     print(f"Total methods with no similar sink pairs: {no_similar_count}")
 
     return similarities
+
 
 def write_csvs(similarities, CSV_FILE):
     first_path = os.path.join(CSV_FILE, "_allcode.csv")

@@ -1,25 +1,27 @@
-To determine the access control level for the `getDisplayInfo` method, let's analyze the provided information:
+To determine the access control level for the `getDisplayInfo` method in the `DisplayManagerService$BinderService` class, we need to analyze the provided information and similar APIs.
 
-1. **Code Snippets**: The method has three different paths (depths) but essentially performs similar operations - it retrieves display information based on a given parameter `p1`. It checks the calling UID and interacts with `LogicalDisplay` and `DisplayManagerService` to get the display info, considering frame rate overrides.
+The `getDisplayInfo` method has three different paths with varying depths, but all of them involve retrieving display information based on the input parameter `p1`, which represents the display ID. The method also checks the calling UID's access to the display and whether the UID is present on the display internally.
 
-2. **Sink Code**: The sink code snippets show how the method returns `DisplayInfo`, which involves getting display information from `LogicalDisplay` or through internal methods of `DisplayManagerService`.
+Looking at the similar APIs provided:
 
-3. **Similar APIs**:
-   - Two instances of `reportVirtualDisplayGeometryAsync` are provided with a high similarity score to `getDisplayInfo`. Both have an access control level of `NONE`.
-   - These similar APIs also interact with display information, specifically getting display info from `mDisplayManagerInternal`.
+1. **reportVirtualDisplayGeometryAsync**: This method has a similarity of 0.8547736406326294 with `getDisplayInfo`. It uses `getDisplayInfo` from `DisplayManagerInternal` but has an access control level of NONE. However, this method's purpose and the context in which it accesses display information are different from directly getting display info.
 
-Given this analysis:
+2. **requestColorMode**: With a similarity of 0.816644012928009, this method interacts with the display settings by changing the color mode. It has an access control level of SYS_OR_SIG, indicating that it requires system or signature-level permission, likely due to its ability to alter display settings.
 
-- The method `getDisplayInfo` is primarily concerned with retrieving and returning display information based on the input parameter and the calling UID. It does not appear to perform any operations that would typically require elevated permissions (like modifying system settings, accessing sensitive user data directly, etc.).
+3. **isMinimalPostProcessingRequested**: This method checks if minimal post-processing is requested for a display and has a similarity of 0.7702497243881226 with `getDisplayInfo`. It has an access control level of NONE, suggesting that reading this particular setting does not require elevated permissions.
 
-- The similar APIs provided (`reportVirtualDisplayGeometryAsync`) have an access control level of `NONE`, suggesting that operations related to retrieving or reporting display geometry or information do not inherently require special permissions.
+4. **connectWifiDisplay**: Although it has a lower similarity (0.7442395091056824), this method connects to a WiFi display and requires SYS_OR_SIG access control. This is likely due to the security implications of connecting to external displays.
 
-- The method's interaction with `Binder` to get the calling UID and its use of `LogicalDisplay` and `DisplayManagerService` methods suggest it is designed to work within the context of the Android system's display management, which includes considerations for security and access control. However, these interactions alone do not necessarily imply a need for a higher access control level without evidence of sensitive data exposure or system modification capabilities.
+5. **getSystemPreferredDisplayMode**: With a similarity of 0.7372074723243713, this method retrieves the system's preferred display mode for a given display ID and has an access control level of NONE.
 
-Based on this analysis, the `getDisplayInfo` method seems to be designed for retrieving information that is either publicly available or accessible based on the caller's identity (UID), without indications of requiring dangerous or signature-level permissions. Therefore, considering the similarity with other APIs and the nature of its operations, the access control level for `getDisplayInfo` would likely be `NONE`, as it does not seem to pose significant risks associated with higher levels of access control.
+Considering these similarities and access control levels, `getDisplayInfo` seems to be more aligned with methods that require lower access control for reading information (like `getSystemPreferredDisplayMode` and `isMinimalPostProcessingRequested`) rather than those that modify settings or connect to external devices (like `requestColorMode` and `connectWifiDisplay`).
+
+However, the method does involve checking the calling UID's access to the display (`v8.hasAccess(v1)`) and whether the UID is present on the display internally (`DisplayManagerService.isUidPresentOnDisplayInternal(v1, p1)`), which suggests some level of security consideration.
+
+Given that reading display information (as in `getDisplayInfo`) is generally less sensitive than modifying display settings or connecting to external displays, but still involves some access control checks, it would be reasonable to assign an access control level that reflects the need for some permission but not at the system or signature level required for more sensitive operations.
+
+Therefore, considering the provided information and the nature of the `getDisplayInfo` method, the most appropriate access control level seems to be NORMAL, as it reflects a balance between the need for some level of access control (due to the checks involved) and the relatively less sensitive nature of reading display information compared to modifying settings or connecting external devices.
 
 ```json
-{
-  "access_control_level": "NONE"
-}
+{ "access_control_level": "NORMAL" }
 ```

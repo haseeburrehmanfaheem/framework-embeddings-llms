@@ -1,23 +1,15 @@
-To determine the access control level for the `notifyAppIoResumed` method, let's analyze the provided information:
+To determine the access control level for the `notifyAppIoResumed` method in the `StorageManagerService` class, we should consider the similarities and differences with the provided APIs, their access control levels, and the semantics of these APIs.
 
-1. **Code Snippets**: The method has three paths with different depths, but all start with `p0.enforceExternalStorageService();`, which suggests that this method is protected and requires a certain level of access or permission related to external storage services.
+1. **Similarity with `notifyAppIoBlocked` API**: This API has a high similarity (above 0.85) with the `notifyAppIoResumed` method, especially in terms of how they interact with `mConnections` and `mUidsBlockedOnIo`. The `notifyAppIoBlocked` API is assigned an access control level of `SYS_OR_SIG`, indicating it requires a system or signature-level permission to execute. Given the similarities in their operations (both deal with app IO state changes), it's reasonable to consider a similar access control level for `notifyAppIoResumed`.
 
-2. **Sink Code**: The sink code snippets involve interactions with `mConnections` and `mUidsBlockedOnIo`, which seem to be related to managing connections and tracking blocked I/O operations for different user IDs. These operations imply a need for careful access control to prevent unauthorized modifications or disclosures of sensitive information.
+2. **Interaction with Sensitive Data**: The method interacts with `mConnections` and `mUidsBlockedOnIo`, which seem to be related to managing app IO operations and their states. Modifying these states (as in the case of `notifyAppIoResumed`) could potentially impact system performance or security, suggesting a need for restricted access.
 
-3. **Similar APIs**:
-   - The similar API `notifyAppIoBlocked` with a high similarity score has an access control level of `SYS_OR_SIG`. This suggests that operations related to notifying about I/O blockages or resumptions are considered sensitive and require system or signature-level permissions.
-   - Both versions of `notifyAppIoBlocked` involve either updating internal state (`mUidsBlockedOnIo`) based on user IDs or delegating the notification to another controller (`this.mStorageSessionController`). These actions imply a level of trust and privilege, consistent with `SYS_OR_SIG` access control.
+3. **Comparison with `isAppIoBlocked` API**: Although this API has a lower similarity score, its operation is related to querying the state of app IO, which is less sensitive than modifying it (as in `notifyAppIoResumed`). The `NONE` access control level for `isAppIoBlocked` reflects this, as reading data is generally considered less risky than writing or modifying system states.
 
-Given these points:
+4. **Consideration of `onSessionEnded` API**: While its similarity score is lower and it operates in a different context (`StatusBarManagerService`), the fact that it also deals with system-level state changes (session endings) and requires `SYS_OR_SIG` access control underscores the importance of securing methods that can alter system or app states.
 
-- The method's initial check `p0.enforceExternalStorageService();` indicates it requires specific permissions.
-- The operations within the method (managing connections, updating I/O blockage status) are sensitive and should be protected against unauthorized access.
-- Similar APIs with high similarity scores have a `SYS_OR_SIG` access control level, indicating that such operations are considered to require system or signature-level permissions.
-
-Therefore, considering the need for protection of external storage services and the similarity with other APIs that manage I/O blockages, the most appropriate access control level for the `notifyAppIoResumed` method would be `SYS_OR_SIG`.
+Given these considerations, the `notifyAppIoResumed` method's ability to modify app IO states and its similarities with other system-level APIs suggests that it should have a restrictive access control level. Since modifying system states (like resuming app IO) is generally more sensitive than querying them, and considering the similarities with `notifyAppIoBlocked`, assigning an access control level of `SYS_OR_SIG` seems appropriate.
 
 ```json
-{
-  "access_control_level": "SYS_OR_SIG"
-}
+{ "access_control_level": "SYS_OR_SIG" }
 ```
