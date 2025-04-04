@@ -223,11 +223,11 @@ def calculate_embeddings(df):
             {each}
             }}
             '''
-            code_embedding = get_code_embedding(each)
+            code_embedding = get_code_embedding(code) # todo : look here
             embeddings.append(code_embedding)
         df.at[index, "embeddings"] = embeddings
 
-def get_top_similar_methods(similarities, top_n=5, threshold=0.7):
+def get_top_similar_methods(similarities, top_n=4, threshold=0.7):
     # Filter based on the similarity threshold
     filtered = [entry for entry in similarities if entry['similarity'] > threshold]
     # Sort the filtered entries in descending order by similarity
@@ -348,7 +348,7 @@ def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx
     }
 
 
-def compute_80_top2(df, threshold=0.7):
+def compute_80_top2(df, threshold=0.6):
     # Preprocess all embeddings and metadata
     all_embeddings = []
     method_info = []  # List of tuples (method_id, code_snippet, sink_idx)
@@ -548,7 +548,6 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
         df.at[index, 'access control level predicted'] = access_control
 
         print(f"Method: {method_name}, Service: {service_name}, Access Control: {access_control}")
-
         # Define folder path and create directories 
         folder_path = os.path.join(output_folder_preprocess, service_name, method_name)
         os.makedirs(folder_path, exist_ok=True)

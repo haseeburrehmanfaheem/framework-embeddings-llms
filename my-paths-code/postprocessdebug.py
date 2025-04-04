@@ -28,11 +28,9 @@ import argparse
 import os
 counter = 0
 
-# Load model and tokenizer
-checkpoint = "Salesforce/codet5p-110m-embedding"
+checkpoint="Salesforce/codet5p-110m-embedding"
 tokenizer = AutoTokenizer.from_pretrained(checkpoint, trust_remote_code=True)
 model = AutoModel.from_pretrained(checkpoint, trust_remote_code=True).to("cuda")
-
 
 def get_java_code(row):
 # get the maximum depth
@@ -83,7 +81,10 @@ def get_three_java_codes(row):
         for i, entry in enumerate(selected_entries)
     ])
 
-
+def remove_empty_embeddings(df):
+    # Filter out rows where the embeddings column is empty or None
+    df_filtered = df[df["embeddings"].apply(lambda x: x is not None and len(x) > 0)]
+    return df_filtered
 
 def remove_comments(json_string):
     """Remove single-line comments (//) from the JSON string."""
@@ -165,22 +166,29 @@ def extract_json_from_string(input_string):
     # 5. Final fallback: search for a substring that starts with '{' and ends with '}'
     return try_extract_curly_braces(input_string)
 
-def get_code_embedding(code_snippet, device="cuda"):
+
+def get_code_embedding(code_snippet):
     """
     Generates embeddings for a given code snippet using a pre-trained model.
 
     Parameters:
     - code_snippet (str): The code for which embeddings are to be generated.
+    - checkpoint (str): The model checkpoint to be used for embedding. Default is Salesforce/codet5p-110m-embedding.
     - device (str): Device to run the model on, either 'cuda' for GPU or 'cpu' for CPU. Default is 'cuda'.
 
     Returns:
     - torch.Tensor: Embedding tensor for the input code.
     """
     
-    inputs = tokenizer.encode(code_snippet.strip(), return_tensors="pt", truncation=True, max_length=512).to(device)
+    inputs_ids = tokenizer.encode(code_snippet.strip())  # Get tokenized IDs without truncation
+
+    if len(inputs_ids) > 512:
+        print(f"Warning: Code snippet exceeds 512 tokens ({len(inputs_ids)} tokens). It will be truncated.")
+    inputs = tokenizer.encode(code_snippet, return_tensors="pt", truncation=True, max_length=512).to("cuda")
     with torch.no_grad():
-        embedding = model(inputs)[0]  # We use only the output embeddings, not the hidden states
-    return embedding.cpu()  # Move the result to CPU if necessary
+        embedding = model(inputs)[0]
+    
+    return embedding.cpu()
 
 def process_json_answer(json_answer, n=float("inf")):
     global counter
@@ -203,98 +211,117 @@ def process_json_answer(json_answer, n=float("inf")):
     counter += 1
     return all
 
-def calculate_embeddings(df, device="cuda"):
-    """
-    Calculates embeddings for all code snippets in the provided dataframe.
-    
-    Parameters:
-    - df (DataFrame): The dataframe containing code snippets.
-    - device (str): Device to run the model on, either 'cuda' for GPU or 'cpu' for CPU.
-    
-    Returns:
-    - df (DataFrame): The dataframe with embeddings added.
-    """
+def calculate_embeddings(df):
     df["embeddings"] = None
     for index, row in tqdm(df.iterrows(), total=len(df), desc="Processing Embeddings"):
         code_snippets = row["sink_code"]
         embeddings = []
         method_signature = row["depths"][0]['java_code'].split("\n")[0]
-        
-        # Use batch processing for the code snippets
-        batch_code_snippets = [f"{method_signature}\n{each}\n}}" for each in code_snippets]
-        batch_code_snippets = [each for each in code_snippets]
-        batch_embeddings = []
-
-        if not batch_code_snippets:
-            continue
-        # Process the batch of code snippets
-        inputs = tokenizer(batch_code_snippets, padding=True, truncation=True, return_tensors="pt").to(device)
-        with torch.no_grad():
-            # Generate embeddings for the batch of code snippets
-            batch_embedding = model(inputs["input_ids"])[0]  # Output the embeddings from the model
-            batch_embeddings = batch_embedding.cpu().tolist()  # Move back to CPU for processing
-
-        embeddings.extend(batch_embeddings)
+        for each in code_snippets:
+            code = f'''
+            {method_signature}
+            {each}
+            }}
+            '''
+            code_embedding = get_code_embedding(each)
+            embeddings.append(code_embedding)
         df.at[index, "embeddings"] = embeddings
 
-    return df
-
-def get_top_similar_methods(similarities, top_n=2, threshold=0.7): # change threshold here
+def get_top_similar_methods(similarities, top_n=5, threshold=0.7):
+    # Filter based on the similarity threshold
     filtered = [entry for entry in similarities if entry['similarity'] > threshold]
+    # Sort the filtered entries in descending order by similarity
     sorted_results = sorted(filtered, key=lambda x: x['similarity'], reverse=True)
-    top_results = sorted_results[:top_n]
+    
+    unique_ep2_ids = set()
+    unique_ep2_codes = set()
+    results = []
+    
+    for entry in sorted_results:
+        # Skip if the ep2_code is already in the results
+        if entry['ep2_code'] in unique_ep2_codes:
+            continue
+        
+        # If the ep2_id is already included, add the entry (if its ep2_code is new)
+        if entry['ep2_id'] in unique_ep2_ids:
+            results.append(entry)
+            unique_ep2_codes.add(entry['ep2_code'])
+        else:
+            # This is a new unique ep2_id
+            if len(unique_ep2_ids) < top_n:
+                unique_ep2_ids.add(entry['ep2_id'])
+                results.append(entry)
+                unique_ep2_codes.add(entry['ep2_code'])
+            else:
+                # Encountering a new unique ep2_id beyond our top_n limit; break out of the loop.
+                break
+
+    # Extract and return all relevant fields including sensitivity information
     extracted_results = [
         {
-            'ep2_code': entry['ep2_code'],
             'ep2_id': entry['ep2_id'],
+            'ep2_code': entry['ep2_code'],
             'ep1_code': entry['ep1_code'],
-            'similarity': entry['similarity']
+            'similarity': entry['similarity'],
+            'ep1_sink_idx': entry['ep1_sink_idx'],
+            'ep2_sink_idx': entry['ep2_sink_idx'],
+            'sensitivity_pair': entry['sensitivity_pair']
         }
-        for entry in top_results
+        for entry in results
     ]
     
     return extracted_results
 
 def create_prompt2_string(top_similar, df, original_method, original_code, sink_code, method_name_unprocessed):
     if not top_similar:
-        return "No similar APIs found"  # Return an empty string if there are no similar methods
-    
+        return "No similar APIs found"
+
     original_class = df[df["method"] == method_name_unprocessed]["service_name"].values[0]
-    prompt = f"The method {original_method} in the following class {original_class} has the following code snippet:\n\n"
-    prompt += f"{original_code}\n" 
-    prompt += f"and the following sink code:\n"
-    prompt += f"{sink_code}\n\n"
+    prompt = f"The method {original_method} in class {original_class} has this code:\n\n{original_code}\n"
+    prompt += f"With these sensitive sinks (ordered by sensitivity, 0 = most sensitive):\n{sink_code}\n\n"
     
+    prompt += f"Similar APIs found (with sensitivity matching details):\n\n"
     
-    prompt += f"The method {original_method} has the following similar APIs:\n\n"
+    # Group entries by unique API method (ep2_id)
+    grouped = {}
     for entry in top_similar:
         ep2_id = entry["ep2_id"]
-        ep2_code = entry["ep2_code"]
-
-        # Find access control level for ep2_id
-        access_control = df[df["method"] == ep2_id]["access control level"].values
-        class_name = df[df["method"] == ep2_id]["service_name"].values[0]
-        access_control_str = access_control[0] if len(access_control) > 0 else "Unknown"
-
-        prompt += f"- API Name: {ep2_id} in the following Class: {class_name} with"
-        prompt += f" Similarity Score: {entry.get('similarity', 'N/A')}\n"
-        prompt += f"  - Access Control Level: {access_control_str} and the following code:\n"
-        prompt += f"{ep2_code}\n\n"
-
-    # Add final instructions for assigning access control
-    # prompt += (
-    #     "Your task is to assign Access Control to a new android mehtod listed below. I will provide you with the original APIs code and the other similar APIs with their ground truth Access Control."
-    #     "Given this information, your task is to assign an access control to the "
-    #     f"{original_method} API. After the explanation, give the final access control "
-    #     "level for the API in JSON format as follows:\n"
-    #     "{ \"access_control_level\": \"...\" }.\n\n"
-    #     "You have 4 choices: NONE, NORMAL, DANGEROUS, SYS_OR_SIG. To make an informed decision, "
-    #     "carefully review other APIs (ground truth) that I have provided above that interact "
-    #     "with the same sinks, their assigned access control levels, and the semantics of those APIs. "
-    # )
-
-    return prompt
+        if ep2_id not in grouped:
+            grouped[ep2_id] = []
+        grouped[ep2_id].append(entry)
     
+    for ep2_id, entries in grouped.items():
+        # Get metadata from dataframe
+        class_name = df[df["method"] == ep2_id]["service_name"].values[0]
+        access_control = df[df["method"] == ep2_id]["access control level"].values
+        access_control_str = access_control[0] if len(access_control) > 0 else "Unknown"
+        
+        prompt += f"- {ep2_id} (Class: {class_name}, Access: {access_control_str})\n"
+        
+        for entry in entries:
+            ep1_idx = entry["ep1_sink_idx"]
+            ep2_idx = entry["ep2_sink_idx"]
+            similarity = entry["similarity"]
+            
+            # Explain sensitivity matching
+            sensitivity_info = ""
+            if ep1_idx == 0 and ep2_idx == 0:
+                sensitivity_info = "(Top-sensitive sinks matched)"
+            elif ep1_idx == 0:
+                sensitivity_info = f"(Top-sensitive sink in source matched to position {ep2_idx+1} in target)"
+            elif ep2_idx == 0:
+                sensitivity_info = f"(Position {ep1_idx+1} in source matched to top-sensitive sink in target)"
+            else:
+                sensitivity_info = f"(Position {ep1_idx+1} in source matched to position {ep2_idx+1} in target)"
+            
+            prompt += (
+                f"  • Similarity: {similarity:.3f} {sensitivity_info}\n"
+                f"  • Source sink (position {ep1_idx}):\n{entry['ep1_code']}\n"
+                f"  • Target sink (position {ep2_idx}):\n{entry['ep2_code']}\n\n"
+            )
+    
+    return prompt
+   
 def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx):
     """ runs the second prompt - extract sinks from the traces
     """
@@ -320,68 +347,84 @@ def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx
         "response": response['message']['content']
     }
 
-def compute_80_top2(df, device="cuda"):
-    """
-    Compute top-2 similar pairs for the code snippets with cosine similarity > 0.8.
-    
-    Parameters:
-    - df (DataFrame): The dataframe containing code snippets and embeddings.
-    - device (str): Device to run the model on, either 'cuda' for GPU or 'cpu' for CPU.
-    
-    Returns:
-    - similarities (dict): Dictionary with method ids and similar pairs.
-    """
-    similarities = {}
-    no_similar_count = 0  # Counter for methods with no similar pairs
 
-    for index1, row1 in tqdm(df.iterrows(), total=len(df), desc="Computing Similarities"):
-        ep1_id = row1["method"]  # Name of the EP1
-        ep1_embeddings = row1["embeddings"]  # List of embeddings for the EP1
-        ep1_sink_code = row1["sink_code"]  # List of code snippets for the EP1
+def compute_80_top2(df, threshold=0.7):
+    # Preprocess all embeddings and metadata
+    all_embeddings = []
+    method_info = []  # List of tuples (method_id, code_snippet, sink_idx)
+    method_to_indices = {}  # Maps method to its embedding indices
 
-        similar_sink_pairs = []  # List to store all similar sink code pairs with similarity > 0.8
-        found_similar = False  # Flag to check if any similar pair is found for this EP1
+    for idx, row in df.iterrows():
+        method = row["method"]
+        embeddings = row["embeddings"]
+        codes = row["sink_code"]
+        indices = []
+        for sink_idx, (emb, code) in enumerate(zip(embeddings, codes)):
+            all_embeddings.append(emb.clone().detach())
+            method_info.append((method, code, sink_idx))  # Add sink index
+            indices.append(len(all_embeddings) - 1)
+        method_to_indices[method] = indices
 
-        for index2, row2 in df.iterrows():
-            if index1 == index2:
-                continue  
+    # Move all embeddings to GPU and normalize
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    all_embeddings = torch.stack(all_embeddings).to(device)
+    all_embeddings = torch.nn.functional.normalize(all_embeddings, p=2, dim=1)
 
-            ep2_id = row2["method"]  # Name of the EP2
-            ep2_embeddings = row2["embeddings"]  # List of embeddings for the EP2
-            ep2_sink_code = row2["sink_code"]  # List of code snippets for the EP2  
+    similarities = {method: [] for method in method_to_indices.keys()}
 
-            # Ensure embeddings are moved to GPU before comparison
-            ep1_embeddings_gpu = [emb.to(device) if isinstance(emb, torch.Tensor) else torch.tensor(emb).to(device) for emb in ep1_embeddings]
-            ep2_embeddings_gpu = [emb.to(device) if isinstance(emb, torch.Tensor) else torch.tensor(emb).to(device) for emb in ep2_embeddings]
+    # Process each method's embeddings against all others
+    for method in tqdm(method_to_indices, desc="Processing methods"):
+        ep1_indices = method_to_indices[method]
+        if not ep1_indices:
+            continue
 
+        # Get other embeddings not belonging to this method
+        other_indices = [i for i in range(len(all_embeddings)) if method_info[i][0] != method]
+        if not other_indices:
+            continue
 
-            # Compute similarities using GPU
-            for i, emb1 in enumerate(ep1_embeddings_gpu):
-                for j, emb2 in enumerate(ep2_embeddings_gpu):
-                    sim = torch.nn.functional.cosine_similarity(
-                        emb1, emb2, dim=0
-                    ).item()
-                    
-                    if sim > 0.5:  # Check for similarity threshold
-                        similar_sink_pairs.append({
-                            "similarity": sim,
-                            "ep1_code": ep1_sink_code[i],
-                            "ep2_id": ep2_id,
-                            "ep2_code": ep2_sink_code[j]
-                        })
-                        found_similar = True  # Mark that at least one similarity was found
+        # Compute similarities in batches
+        batch_size = 100000  # Adjust based on GPU memory
+        ep1_embs = all_embeddings[ep1_indices]
+        num_other = len(other_indices)
+        num_batches = (num_other + batch_size - 1) // batch_size
 
-        # Store all similar pairs for the current EP
-        similarities[ep1_id] = similar_sink_pairs
+        for batch_idx in range(num_batches):
+            start = batch_idx * batch_size
+            end = min((batch_idx + 1) * batch_size, num_other)
+            batch_other_indices = other_indices[start:end]
+            other_embs = all_embeddings[batch_other_indices]
 
-        # Increment counter if no similar pairs were found for this method
-        if not found_similar:
-            no_similar_count += 1
+            # Compute cosine similarity matrix
+            sim_batch = torch.mm(ep1_embs, other_embs.T).cpu().numpy()
 
-    # Print the total count of methods with no similar pairs
+            # Find pairs above threshold
+            rows, cols = (sim_batch > threshold).nonzero()
+            for i, j in zip(rows, cols):
+                # Get EP1's metadata
+                ep1_global_idx = ep1_indices[i]
+                ep1_method, ep1_code, ep1_sink_idx = method_info[ep1_global_idx]
+                
+                # Get EP2's metadata
+                other_global_idx = batch_other_indices[j]
+                ep2_method, ep2_code, ep2_sink_idx = method_info[other_global_idx]
+
+                similarities[method].append({
+                    "similarity": sim_batch[i, j],
+                    "ep1_code": ep1_code,
+                    "ep1_sink_idx": ep1_sink_idx,          # Index in EP1's sink_code
+                    "ep2_id": ep2_method,
+                    "ep2_code": ep2_code,
+                    "ep2_sink_idx": ep2_sink_idx,          # Index in EP2's sink_code
+                    "sensitivity_pair": (ep1_sink_idx, ep2_sink_idx)  # Tuple of positions
+                })
+
+    # Count methods with no similar pairs
+    no_similar_count = sum(1 for entries in similarities.values() if not entries)
     print(f"Total methods with no similar sink pairs: {no_similar_count}")
 
     return similarities
+
 
 def write_csvs(similarities, CSV_FILE):
     first_path = os.path.join(CSV_FILE, "_allcode.csv")
@@ -434,7 +477,7 @@ def write_csvs(similarities, CSV_FILE):
 
 
 
-    third_path = os.path.join(CSV_FILE, "_top2code" + ".csv")
+    third_path = os.path.join(CSV_FILE, "_topncode" + ".csv")
     with open(third_path, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
 
@@ -446,7 +489,7 @@ def write_csvs(similarities, CSV_FILE):
             
             if similar_pairs:
                 # Sort the pairs by similarity in descending order
-                top_pairs = sorted(similar_pairs, key=lambda x: x["similarity"], reverse=True)[:2]
+                top_pairs = sorted(similar_pairs, key=lambda x: x["similarity"], reverse=True)
                 for pair in top_pairs:
                     writer.writerow([
                         ep,
@@ -456,23 +499,27 @@ def write_csvs(similarities, CSV_FILE):
                         pair['similarity']
                     ])
             else:
-                writer.writerow([ep, "No similar EPs with similarity > 0.8", "", "", ""])
+                writer.writerow([ep, "No similar EPs with similarity > 0.5", "", "", ""])
 
     print(f"Data has been written to {CSV_FILE}")
 
-import os
-import json
-from tqdm import tqdm
 
 def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2, sys_prompt2, num_ctx):
     df["json_answer2"] = None
     df["access control level predicted"] = "invalid"
     df["res2"] = None  # New column to store the raw response
 
+    DEBUG_COUNTER_TOTAL = 0
+    DEBUG_COUNTER_CORRECT = 0
     for index, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing rows"):
         full_method_name = row['method']
         method_name = row['method'].split("(")[0]
         service_name = row['service_name']
+        original_access_control = row['access control level']
+        ################### DEBUGGING ###################
+        if original_access_control != "NONE":
+            continue
+        DEBUG_COUNTER_TOTAL += 1
         top_similar = get_top_similar_methods(similarities.get(full_method_name, []))
 
         prompt = ""
@@ -508,7 +555,8 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
         df.at[index, 'access control level predicted'] = access_control
 
         print(f"Method: {method_name}, Service: {service_name}, Access Control: {access_control}")
-
+        if access_control == original_access_control: ##### to delete
+            DEBUG_COUNTER_CORRECT += 1
         # Define folder path and create directories 
         folder_path = os.path.join(output_folder_preprocess, service_name, method_name)
         os.makedirs(folder_path, exist_ok=True)
@@ -518,6 +566,10 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
         with open(os.path.join(folder_path, 'response2.txt'), 'w') as f:
             f.write(res["response"])
 
+    print(f"Total methods processed: {DEBUG_COUNTER_TOTAL}")
+    print(f"Correctly predicted access control levels: {DEBUG_COUNTER_CORRECT}")
+    print(f"Accuracy: {DEBUG_COUNTER_CORRECT / DEBUG_COUNTER_TOTAL * 100:.2f}%")
+    
     # Save the updated DataFrame to a Parquet file
     df_to_save = df.drop(columns=['embeddings'], errors='ignore')
     df_output_file = os.path.join(output_folder_preprocess, "android_services_methods_postprocess.parquet")
@@ -559,6 +611,7 @@ def main():
     print(f"row with valid json  = {counter}")
 
     calculate_embeddings(df)
+    df = remove_empty_embeddings(df)
     similarities = compute_80_top2(df)
     write_csvs(similarities, args.input_dir)
     
