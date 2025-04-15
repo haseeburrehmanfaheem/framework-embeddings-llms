@@ -227,7 +227,7 @@ def calculate_embeddings(df):
             embeddings.append(code_embedding)
         df.at[index, "embeddings"] = embeddings
 
-def get_top_similar_methods(similarities, top_n=4, threshold=0.7):
+def get_top_similar_methods(similarities, top_n=4, threshold=0.7): 
     # Filter based on the similarity threshold
     filtered = [entry for entry in similarities if entry['similarity'] > threshold]
     # Sort the filtered entries in descending order by similarity
@@ -504,7 +504,7 @@ def write_csvs(similarities, CSV_FILE):
     print(f"Data has been written to {CSV_FILE}")
 
 
-def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2, sys_prompt2, num_ctx):
+def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2, sys_prompt2, num_ctx, similarity_threshold):
     df["json_answer2"] = None
     df["access control level predicted"] = "invalid"
     df["res2"] = None  # New column to store the raw response
@@ -513,7 +513,7 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
         full_method_name = row['method']
         method_name = row['method'].split("(")[0]
         service_name = row['service_name']
-        top_similar = get_top_similar_methods(similarities.get(full_method_name, []))
+        top_similar = get_top_similar_methods(similarities.get(full_method_name, []),4, similarity_threshold)
 
         prompt = ""
         json_answer = {"access_control_level": "invalid"}
@@ -572,26 +572,29 @@ def main():
     parser.add_argument('--model', required=True, help='Ollama model name to use')
     parser.add_argument('--num-ctx', type=int, default=25000, help='Context window size')
     parser.add_argument('--input-dir', required=True, help='Input directory for results')
+    parser.add_argument("--similarity-threshold", type=float, required=True, help="Similarity threshold for filtering")
     
     args = parser.parse_args()
+
     with open(args.prompt, 'r') as file:
         sys_prompt2 = file.read()
-    
-    modelfile=f'''
-    FROM llama3.3
-    system """
-    {sys_prompt2.strip()}
-    """
-    '''
+
+    model = args.model
     model_prompt2 = "myexample2"
+
+    ollama.create(
+        model=model_prompt2,
+        from_=model,
+        system=sys_prompt2.strip()
+    )
+
     
-    ollama.create(model=model_prompt2, modelfile=modelfile)
     # ollama.create(model=model_prompt2,
     # from_=args.model,
     # system=sys_prompt2.strip())
     
     file_path = os.path.join(args.input_dir, "android_services_methods.parquet")  
-    
+    similarity_threshold = float(args.similarity_threshold)
     df = pd.read_parquet(file_path)
     df['sink_code'] = df['json_answer'].apply(process_json_answer)
     print(f"total rows = {len(df)}")
@@ -601,10 +604,11 @@ def main():
     df = remove_empty_embeddings(df)
     similarities = compute_80_top2(df)
     write_csvs(similarities, args.input_dir)
-    
-    df = process_dataframe2(df, similarities, args.input_dir, model_prompt2,sys_prompt2.strip(),int(args.num_ctx))
-    
-    
+    df = process_dataframe2(df, similarities, args.input_dir, model_prompt2, sys_prompt2.strip(),int(args.num_ctx), similarity_threshold)
+
+
+
+
     df_filtered = df[df['access control level predicted'] != 'invalid']
     accuracy = (df_filtered['access control level'] == df_filtered['access control level predicted']).mean() * 100
     print(f'Overall Accuracy: {accuracy:.2f}% total rows = {len(df_filtered)}')
@@ -617,6 +621,20 @@ def main():
         print(f"\nPredicted AC Stats for '{acl}':")
         print(stats.to_string())
     print("Done")
+    
+    # write output stats to a file in the output directory
+    output_stats_path = os.path.join(args.input_dir, "output_stats.txt")
+    with open(output_stats_path, 'w') as f:
+        f.write(f'Similarity Threshold: {similarity_threshold}\n')
+        f.write(f'input dir: {args.input_dir}\n')
+        f.write(f'model: {args.model}\n')
+        f.write(f'Overall Accuracy: {accuracy:.2f}% total rows = {len(df_filtered)}\n')
+        for acl in access_levels:
+            subset = df_filtered[df_filtered['access control level'] == acl]
+            stats = subset['access control level predicted'].value_counts().to_frame(name='Count')
+            stats['Percentage'] = (stats['Count'] / stats['Count'].sum()) * 100
+            f.write(f"\nPredicted AC Stats for '{acl}':\n")
+            f.write(stats.to_string())
     
 
 if __name__ == "__main__":

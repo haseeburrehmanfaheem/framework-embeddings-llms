@@ -284,31 +284,17 @@ def main():
     parser.add_argument('--model', required=True, help='Ollama model name to use')
     parser.add_argument('--num-ctx', type=int, default=25000, help='Context window size')
     # parser.add_argument('--service-name', help='Specific service name to process')
-    
     args = parser.parse_args()
-
     with open(args.prompt, 'r') as f:
         sys_prompt = f.read().strip()
     model_name = "model1"
-    # ollama.create(model=model_name,
-    #           from_=args.model,
-    #           system=sys_prompt.strip())
-    
-    modelfile=f'''
-    FROM {args.model.strip()}
-    system """
-    {sys_prompt.strip()}
-    """
-    '''
-    
-    ollama.create(model=model_name, modelfile=modelfile)
-    
 
+    ollama.create(
+        model=model_name,
+        from_=args.model.strip(),
+        system=sys_prompt
+    )
     df = process_csv_files(args.csv_dir)
-    
-    # if args.service_name:
-    # df = df[df["service_name"] == "Lcom.android.server.pm.UserManagerService"]
-    # df = df[:500]
     print(f"length of df: {len(df)}")
     process_dataframe(
         df=df,
