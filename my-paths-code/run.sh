@@ -15,11 +15,11 @@ SHARED_DIR="$1"
 echo "Using shared directory: $SHARED_DIR"
 
 echo "Starting preprocessing..."    
-python ./preprocess.py --csv-dir ./input-tecno/Execution-Paths --output-dir "$SHARED_DIR" --prompt ../prompts/prompt1-11.txt --model llama3.3 --num-ctx 30000
+# python ./preprocess.py --csv-dir /u1/hfaheem/DLAndroidArtifact/my-paths-code/input/Execution-Paths --output-dir "$SHARED_DIR" --prompt ../prompts/prompt1-11.txt --model gemma3:27b --num-ctx 30000
 
 echo "Preprocessing completed."
 
 echo "Starting postprocessing..."
-python ./postprocess.py --input-dir "$SHARED_DIR" --prompt ../prompts/prompt2.txt --model llama3.3 --num-ctx 30000
+python ./postprocess_checkpoint.py --input-dir "$SHARED_DIR" --prompt /u1/hfaheem/DLAndroidArtifact/prompts/prompt2-6.txt --model gemma3:27b --num-ctx 20000 --similarity-threshold 0.75 
 
 echo "Postprocessing completed."

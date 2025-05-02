@@ -330,7 +330,6 @@ def main():
     parser.add_argument('--prompt', required=True, help='Path to prompt file')
     parser.add_argument('--model', required=True, help='Ollama model name to use')
     parser.add_argument('--num-ctx', type=int, default=25000, help='Context window size')
-    # parser.add_argument('--service-name', help='Specific service name to process')
     args = parser.parse_args()
     with open(args.prompt, 'r') as f:
         sys_prompt = f.read().strip()
