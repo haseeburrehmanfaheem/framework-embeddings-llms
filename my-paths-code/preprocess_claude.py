@@ -14,9 +14,9 @@ from anthropic.types.messages.batch_create_params import Request
 import time 
 import tiktoken
 encoding = tiktoken.encoding_for_model("gpt-4")
-client = anthropic.Anthropic(api_key="KEY")
+client = anthropic.Anthropic(api_key="")
 MODEL_NAME = "claude-3-7-sonnet-20250219"  
-MAX_TOKENS = 2048
+MAX_TOKENS = 4096
 TEMPERATURE = 0.3
 
 def process_csv_files(csv_directory):
@@ -265,8 +265,8 @@ def batch_process_dataframe(df, output_folder, SYSTEM_PROMPT):
     Tracks token usage for input and output.
     """
     # Initialize token counting columns
-    df["input_tokens"] = 0
-    df["output_tokens"] = 0
+    df["input_tokens_1"] = 0
+    df["output_tokens_1"] = 0
     
     # Initialize the tokenizer
     enc = tiktoken.encoding_for_model("gpt-4")  # Using gpt-4 encoding as an approximation
@@ -285,7 +285,7 @@ def batch_process_dataframe(df, output_folder, SYSTEM_PROMPT):
         # Count input tokens (system prompt + user message)
         user_tokens = len(enc.encode(prompt_code))
         total_input_tokens = sys_prompt_tokens + user_tokens
-        df.at[index, "input_tokens"] = total_input_tokens
+        df.at[index, "input_tokens_1"] = total_input_tokens
         
         custom_id = str(index)  # use the row index as a unique identifier
         custom_id_to_info[custom_id] = {
@@ -336,7 +336,7 @@ def batch_process_dataframe(df, output_folder, SYSTEM_PROMPT):
             # Count output tokens
             output_tokens = len(enc.encode(text_response))
             row_index = custom_id_to_info[custom_id]["row_index"]
-            df.at[row_index, "output_tokens"] = output_tokens
+            df.at[row_index, "output_tokens_1"] = output_tokens
             
             # print(f"Success! Custom ID {custom_id}: {text_response}")
             
@@ -365,27 +365,27 @@ def batch_process_dataframe(df, output_folder, SYSTEM_PROMPT):
             print(f"Error for custom ID {custom_id}: {result.result.error}")
             # Set output tokens to 0 for errors
             row_index = custom_id_to_info[custom_id]["row_index"]
-            df.at[row_index, "output_tokens"] = 0
+            df.at[row_index, "output_tokens_1"] = 0
         elif res_type == "expired":
             print(f"Request expired for custom ID {custom_id}")
             # Set output tokens to 0 for expired requests
             row_index = custom_id_to_info[custom_id]["row_index"]
-            df.at[row_index, "output_tokens"] = 0
+            df.at[row_index, "output_tokens_1"] = 0
         else:
             print(f"Unhandled result type for custom ID {custom_id}: {res_type}")
             # Set output tokens to 0 for unhandled result types
             row_index = custom_id_to_info[custom_id]["row_index"]
-            df.at[row_index, "output_tokens"] = 0
+            df.at[row_index, "output_tokens_1"] = 0
 
     # Optionally, serialize any JSON answers for storage
     df["json_answer"] = df["json_answer"].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else str(x))
     
     # Calculate and print token usage statistics
-    total_input_tokens = df['input_tokens'].sum()
-    total_output_tokens = df['output_tokens'].sum()
+    total_input_tokens = df['input_tokens_1'].sum()
+    total_output_tokens = df['output_tokens_1'].sum()
     total_tokens = total_input_tokens + total_output_tokens
-    avg_input_tokens = df['input_tokens'].mean() 
-    avg_output_tokens = df['output_tokens'].mean()
+    avg_input_tokens = df['input_tokens_1'].mean() 
+    avg_output_tokens = df['output_tokens_1'].mean()
     
     print(f"\nToken Usage Statistics:")
     print(f"Total input tokens: {total_input_tokens}")
@@ -416,8 +416,8 @@ def main():
     )
     
     # Calculate token usage statistics
-    total_input_tokens = df['input_tokens'].sum()
-    total_output_tokens = df['output_tokens'].sum()
+    total_input_tokens = df['input_tokens_1'].sum()
+    total_output_tokens = df['output_tokens_1'].sum()
     total_tokens = total_input_tokens + total_output_tokens
     
     # Write token usage statistics to a file
@@ -427,8 +427,8 @@ def main():
         f.write(f"Total input tokens: {total_input_tokens}\n")
         f.write(f"Total output tokens: {total_output_tokens}\n")
         f.write(f"Total tokens (input + output): {total_tokens}\n")
-        f.write(f"Average input tokens per request: {df['input_tokens'].mean():.2f}\n")
-        f.write(f"Average output tokens per request: {df['output_tokens'].mean():.2f}\n")
+        f.write(f"Average input tokens per request: {df['input_tokens_1'].mean():.2f}\n")
+        f.write(f"Average output tokens per request: {df['output_tokens_1'].mean():.2f}\n")
     
     print(f"Token usage statistics saved to {stats_path}")
     

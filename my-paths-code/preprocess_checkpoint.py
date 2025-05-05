@@ -9,6 +9,9 @@ import csv
 import pandas as pd
 import ollama
 from tqdm import tqdm
+import tiktoken
+import ollama
+encoding = tiktoken.encoding_for_model("gpt-4")
 
 def process_csv_files(csv_directory):
     """Process CSV files and structure data into DataFrame."""
@@ -241,11 +244,7 @@ def extract_json_from_string(input_string):
     # Retry with comment removal
     return try_extract_curly_braces(input_string, remove_comments_first=True)
 
-
 def process_dataframe(df, output_folder, model_name, sys_prompt, num_ctx):
-    """
-    Process DataFrame and save results, with checkpointing in place.
-    """
     checkpoint_file = os.path.join(output_folder, "checkpoint.parquet")
     if os.path.exists(checkpoint_file):
         print(f"Checkpoint file found at {checkpoint_file}. Loading it...")
@@ -276,21 +275,32 @@ def process_dataframe(df, output_folder, model_name, sys_prompt, num_ctx):
         df['prompt1'] = None
 
     # Now iterate only over rows that are not processed
-    # Here we consider a row "processed" if 'json_answer' is not None (or empty) 
-    # Adapt if your sentinel is different
     rows_to_process = df[df['json_answer'].isnull()].index
 
-    print(f"{len(rows_to_process)} rows left to process out of {len(df)} total rows.")
-
-    for index in tqdm(rows_to_process, total=len(rows_to_process), desc="Processing rows"):
+    total_rows = len(rows_to_process)
+    print(f"{total_rows} rows left to process out of {len(df)} total rows.")
+    
+    # Progress tracking variables
+    processed_count = 0
+    success_count = 0
+    error_count = 0
+    
+    for index in tqdm(rows_to_process, total=total_rows, desc="Processing rows"):
         row = df.loc[index]
         method_name = row['method'].split("(")[0]
         service_name = row['service_name']
 
-        code_string_2 = get_three_java_codes(row)  # This is your custom function
+        code_string_2 = get_three_java_codes(row)  
 
         try:
             df.at[index, 'prompt1'] = code_string_2
+            
+            # print input tokens using tiktoken encoding
+            num_tokens = len(encoding.encode(code_string_2))
+            print(f"Number of tokens in input: {num_tokens}")
+            print(f"method name: {service_name} {method_name}")
+            
+            
             res = run_ollama_prompt(code_string_2, model_name, sys_prompt, num_ctx)
 
             df.at[index, 'res1'] = res['response']
@@ -310,18 +320,26 @@ def process_dataframe(df, output_folder, model_name, sys_prompt, num_ctx):
             ]:
                 with open(os.path.join(folder_path, file), 'w', encoding='utf-8') as f:
                     f.write(content)
+                    
+            success_count += 1
 
         except Exception as e:
             print(f"Error processing {service_name}/{method_name}: {e}")
-            # You could optionally continue or break here. 
-            # For now, let's continue to process the next row
+            error_count += 1
+            # Continue to process the next row
             continue
-
-        # --- SAVE CHECKPOINT AFTER EACH ROW (or every N rows) ---
+        finally:
+            processed_count += 1
         df.to_parquet(checkpoint_file)
 
     print("All done with process_dataframe. Final checkpoint saved.")
     
+    # delete the checkpoint file 
+    if os.path.exists(checkpoint_file):
+        os.remove(checkpoint_file)
+        print(f"Checkpoint file {checkpoint_file} deleted.")
+    
+    return df
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze Java execution paths for security sinks')
@@ -342,6 +360,8 @@ def main():
     )
     df = process_csv_files(args.csv_dir)
     print(f"length of df: {len(df)}")
+    
+    print("num context = ", args.num_ctx)
     process_dataframe(
         df=df,
         output_folder=args.output_dir,

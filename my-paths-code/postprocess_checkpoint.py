@@ -595,9 +595,14 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
 
     # Save the final updated DataFrame to a Parquet file
     df_to_save = df.drop(columns=['embeddings'], errors='ignore')
-    df_output_file = os.path.join(output_folder_preprocess, "android_services_methods_postprocess.parquet")
+    df_output_file = os.path.join(output_folder_preprocess, f"android_services_methods_postprocess_{similarity_threshold}.parquet")
     df_to_save.to_parquet(df_output_file)
     print(f"DataFrame serialized and saved to {df_output_file}")
+    
+    # Delete the checkpoint file after processing
+    if os.path.exists(checkpoint_file):
+        os.remove(checkpoint_file)
+        print(f"Checkpoint file {checkpoint_file} deleted after processing.")
 
     return df
 
@@ -659,7 +664,7 @@ def main():
     print("Done")
     
     # write output stats to a file in the output directory
-    output_stats_path = os.path.join(args.input_dir, "output_stats.txt")
+    output_stats_path = os.path.join(args.input_dir, f"output_stats-{similarity_threshold}.txt")
     with open(output_stats_path, 'w') as f:
         f.write(f'Similarity Threshold: {similarity_threshold}\n')
         f.write(f'input dir: {args.input_dir}\n')
