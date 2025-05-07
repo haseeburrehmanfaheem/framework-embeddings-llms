@@ -322,30 +322,46 @@ def create_prompt2_string(top_similar, df, original_method, original_code, sink_
     
     return prompt
    
-def run_second_prompt_Ollama(method_code, model_prompt2,run, sys_prompt2,num_ctx):
-    """ runs the second prompt - extract sinks from the traces
+import httpx
+from ollama import Client
+
+_OLLAMA_CLIENT = Client(timeout=httpx.Timeout(90))   
+
+def run_second_prompt_Ollama(method_code: str,
+                             model_prompt2: str,
+                             run,                  
+                             sys_prompt2: str,
+                             num_ctx: int):
     """
+    Call the *second* Ollama prompt with a real HTTP timeout.
+    Returns the usual dict; if the model takes longer than the
+    limit, returns {'system_message': 'invalid', ... }.
+    """
+    try:
+        response = _OLLAMA_CLIENT.chat(
+            model=model_prompt2,
+            messages=[{
+                'role': 'user',
+                'content': method_code,           # same as your user_prompt
+            }],
+            options={
+                'num_ctx': num_ctx,
+                'temperature': 0.3,
+            }
+        )
+        return {
+            "system_message": sys_prompt2,
+            "user_message": method_code,
+            "response": response['message']['content'],
+        }
 
-    user_prompt = method_code
-
-    response = ollama.chat(model=model_prompt2, messages=[
-    {
-        'role': 'user',
-        'content': user_prompt,
-    },
-    ]
-    ,
-     options={
-        'num_ctx': num_ctx,
-        'temperature': 0.3 # Todo : Change temperature here
-    }
-    )
-    
-    return {
-        "system_message": sys_prompt2,
-        "user_message": user_prompt,
-        "response": response['message']['content']
-    }
+    except httpx.TimeoutException:
+        # The socket is already closed; nothing keeps running in the background
+        return {
+            "system_message": "invalid",
+            "user_message": "invalid",
+            "response": "invalid",
+        }
 
 
 def compute_80_top2(df, threshold=0.6):
@@ -504,7 +520,7 @@ def write_csvs(similarities, CSV_FILE):
     print(f"Data has been written to {CSV_FILE}")
 
 def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2, sys_prompt2, num_ctx, similarity_threshold):
-    checkpoint_file = os.path.join(output_folder_preprocess, "checkpoint.parquet")
+    checkpoint_file = os.path.join(output_folder_preprocess, f"checkpoint_{similarity_threshold}.parquet")
     if "json_answer2" not in df.columns:
         df["json_answer2"] = None
     if "access control level predicted" not in df.columns:
@@ -557,7 +573,6 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
         else:
             res["response"] = "no top_similar found"
 
-        # Store the raw response in df["res2"]
         df.at[index, 'res2'] = res["response"]
 
         access_control = "invalid"
@@ -600,9 +615,9 @@ def process_dataframe2(df, similarities, output_folder_preprocess, model_prompt2
     print(f"DataFrame serialized and saved to {df_output_file}")
     
     # Delete the checkpoint file after processing
-    if os.path.exists(checkpoint_file):
-        os.remove(checkpoint_file)
-        print(f"Checkpoint file {checkpoint_file} deleted after processing.")
+    # if os.path.exists(checkpoint_file):
+    #     os.remove(checkpoint_file)
+    #     print(f"Checkpoint file {checkpoint_file} deleted after processing.")
 
     return df
 
@@ -614,6 +629,8 @@ def main():
     parser.add_argument('--num-ctx', type=int, default=25000, help='Context window size')
     parser.add_argument('--input-dir', required=True, help='Input directory for results')
     parser.add_argument("--similarity-threshold", type=float, required=True, help="Similarity threshold for filtering")
+    parser.add_argument('--make-model',type=bool,default=True,help='create a new model')
+    
     
     args = parser.parse_args()
 
@@ -622,12 +639,12 @@ def main():
 
     model = args.model
     model_prompt2 = "myexample2"
-
-    ollama.create(
-        model=model_prompt2,
-        from_=model,
-        system=sys_prompt2.strip()
-    )
+    if args.make_model:
+        ollama.create(
+            model=model_prompt2,
+            from_=model,
+            system=sys_prompt2.strip()
+        )
 
     
     # ollama.create(model=model_prompt2,

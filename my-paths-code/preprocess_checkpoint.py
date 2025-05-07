@@ -102,18 +102,33 @@ def get_three_java_codes(row):
         for i, entry in enumerate(selected_entries)
     ])
 
-def run_ollama_prompt(method_code, model_name, sys_prompt, num_ctx):
-    """Execute the analysis prompt with Ollama."""
-    response = ollama.chat(
+import json, multiprocessing as mp
+from ollama import chat     # simple helper, re‑import inside the child
+
+def _worker(method_code, model_name, num_ctx):
+    from ollama import chat
+    return chat(
         model=model_name,
         messages=[{'role': 'user', 'content': method_code}],
-        options={'num_ctx': num_ctx, 'temperature': 0.3} # todo: change temperature
-    )
-    return {
-        "system_message": sys_prompt,
-        "user_message": method_code,
-        "response": response['message']['content']
-    }
+        options={'num_ctx': num_ctx, 'temperature': 0.3}
+    )['message']['content']
+
+
+def run_ollama_prompt(method_code, model_name, sys_prompt, num_ctx, timeout_sec=90):
+    with mp.Pool(1) as pool:                          # one short‑lived process
+        res = pool.apply_async(_worker,
+                               (method_code, model_name, num_ctx))
+        try:
+            txt = res.get(timeout=timeout_sec)
+            return {"system_message": sys_prompt,
+                    "user_message": method_code,
+                    "response": txt}
+        except mp.context.TimeoutError:
+            pool.terminate()                           # force‑kill child
+            return {"system_message": "invalid",
+                    "user_message": "invalid",
+                    "response": "invalid"}
+
 
 def try_extract_and_parse(pattern, input_string, remove_comments_first=False):
     """Extract using the given regex pattern and parse JSON."""
@@ -335,9 +350,9 @@ def process_dataframe(df, output_folder, model_name, sys_prompt, num_ctx):
     print("All done with process_dataframe. Final checkpoint saved.")
     
     # delete the checkpoint file 
-    if os.path.exists(checkpoint_file):
-        os.remove(checkpoint_file)
-        print(f"Checkpoint file {checkpoint_file} deleted.")
+    # if os.path.exists(checkpoint_file):
+    #     os.remove(checkpoint_file)
+    #     print(f"Checkpoint file {checkpoint_file} deleted.")
     
     return df
 
@@ -362,7 +377,7 @@ def main():
     print(f"length of df: {len(df)}")
     
     print("num context = ", args.num_ctx)
-    process_dataframe(
+    df = process_dataframe(
         df=df,
         output_folder=args.output_dir,
         model_name=model_name,
