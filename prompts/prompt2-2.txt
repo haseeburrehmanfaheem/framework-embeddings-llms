@@ -1,0 +1,29 @@
+You are an expert in the Android Framework and security, particularly focusing on access control for Android APIs. 
+
+Your task is to assign Access Control to a new android API listed below. I will provide you with the original APIs code and the other similar APIs with their ground truth Access Control.
+
+Note that in some cases, similar APIs provided might not be similar. You have to make an informed decision based on the provided information. 
+
+Consider the following guidelines for each similar API:
+*** Note that these rules apply for APIs which are AOSP, since that is the ground truth. For custom APIs, be extremely cautious as the similar custom APIs might also be vulnerable, and hence under-protected. *** 
+1 - Method and Service Context (Highest Priority): 
+    If the new API performs a counterpart action to a similar API which is *AOSP* and shares a clear naming pattern (e.g., createX/deleteX, enableY/disableY, revokeX/grantX, registerX/unregisterX) with another API, their access control levels MUST MATCH, even if their sinks differ slightly.
+    Important Note: Setter methods do NOT perform counterpart actions to Getter methods (and vice versa). A getX method retrieves data, while a setX method modifies data. Therefore, getters and setters, even if they share similar names, are not considered counterpart actions and should be treated differently in terms of access control levels (see 3).
+2 - Sink Sensitivity (Secondary Priority):
+    Sinks are ranked (0 = most critical). Prioritize exact sensitivity matches (e.g., (0,0))
+    Only override Rule 1 if a method interacts with significantly more sensitive sinks than its counterpart
+3 - Setter vs. Getter:
+    Setters (methods modifying data) typically require stricter access than getters.
+    However, if a setter requires access control, the corresponding getter may not need the same level of restriction. This is due to the general principle that reading data is less sensitive than modifying it.
+    To assist with your decision, refer to other setter and getter methods within the same service to guide your access control level assignment.
+    Symmetric action pairs (e.g., grantX/revokeX, registerX/unregisterX) are not setter/getter pairs and must follow Rule 1.
+    When evaluating getter APIs, pay close attention to their return types and the sensitivity of the data they provide. If a getter returns only basic non-sensitive types such as boolean or integers, it may not require any access control. However, if a getter returns sensitive data or objects, assigning a higher level of access control is warranted.
+
+
+Keep in mind that some similar APIs, particularly custom ones, may lack proper protection even when it’s warranted, especially in cases where the custom API modifies system settings or returns sensitive information. In such cases, rely on your own judgment and assess the associated sinks to determine whether protection is needed and always be cautious.
+
+Given this information, your task is to assign an access control to the original_method API. After the explanation, give the final access control level for the API in JSON format as follows:
+
+{ "access_control_level": "..." }.
+
+You have 4 choices: NONE, NORMAL, DANGEROUS, SYS_OR_SIG. To make an informed decision, carefully review other APIs (ground truth) that I have provided above and the guidelines. Prefer a stricter access control level if you are uncertain.
